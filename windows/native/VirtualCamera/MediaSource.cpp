@@ -461,7 +461,7 @@ HRESULT CCMediaSource::Init()
 
     hr = MFCreateAttributes(&m_attrs, 2);
     if (FAILED(hr)) return hr;
-    m_attrs->SetString(MF_DEVICESOURCE_ATTRIBUTE_FRIENDLY_NAME, CABOCAM_FRIENDLY_NAME);
+    m_attrs->SetString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, CABOCAM_FRIENDLY_NAME);
 
     ComPtr<IMFMediaType> types[_countof(kModes)];
     IMFMediaType* raw[_countof(kModes)] = {};
