@@ -1,0 +1,58 @@
+name: Windows
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Configure native (CMake)
+        run: cmake -S windows/native -B build/native -A x64
+
+      - name: Build native (CMake)
+        run: cmake --build build/native --config Release
+
+      - name: Publish desktop app
+        run: >
+          dotnet publish windows/desktop/CaboCam.Desktop.csproj
+          -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
+          -o dist/CaboCam
+
+      - name: Assemble package
+        shell: pwsh
+        run: |
+          Copy-Item build/native/bin/Release/*.dll dist/CaboCam/ -Force
+          Copy-Item windows/installer/*.ps1 dist/CaboCam/ -Force
+          Copy-Item windows/installer/LEIA-ME.txt dist/CaboCam/ -Force
+          Get-ChildItem dist/CaboCam | Select-Object Name, Length | Format-Table
+          Compress-Archive -Path dist/CaboCam/* -DestinationPath dist/CaboCam-Windows-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CaboCam-Windows-x64
+          path: dist/CaboCam/
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/CaboCam-Windows-x64.zip
+          generate_release_notes: true

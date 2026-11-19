@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>CaboCam</AssemblyName>
+    <RootNamespace>CaboCam</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <Product>CaboCam</Product>
+    <Company>CaboCam</Company>
+    <Description>iPhone como webcam USB para Windows 11</Description>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- DPI awareness is declared in app.manifest (PerMonitorV2) -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- CaboCam.Native.dll is built by windows/native (CMake). Override with -p:NativeBinDir=... -->
+  <PropertyGroup>
+    <NativeBinDir Condition="'$(NativeBinDir)' == ''">$(MSBuildThisFileDirectory)..\..\build\native\bin\Release\</NativeBinDir>
+    <NativeBinDir>$([MSBuild]::EnsureTrailingSlash('$(NativeBinDir)'))</NativeBinDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(NativeBinDir)CaboCam.Native.dll')">
+    <None Include="$(NativeBinDir)CaboCam.Native.dll" Link="CaboCam.Native.dll"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

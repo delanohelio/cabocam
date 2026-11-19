@@ -1,0 +1,33 @@
+CaboCam - use a câmera do iPhone como webcam no Windows 11
+==========================================================
+
+REQUISITOS
+  - Windows 11 (build 22000 ou superior), 64 bits
+  - iPhone com iOS 17+ e o app CaboCam instalado
+  - Cabo USB (Lightning ou USB-C)
+  - App "Dispositivos Apple" (Apple Devices), da Microsoft Store, ou o iTunes.
+    Ele instala o "Apple Mobile Device Service", usado para a conexão USB.
+
+INSTALAÇÃO (uma única vez)
+  1. Extraia este zip em uma pasta qualquer.
+  2. Clique com o botão direito em install.ps1 > "Executar com o PowerShell"
+     (o script pede permissão de administrador sozinho).
+     Se o PowerShell bloquear a execução, abra um terminal e rode:
+         powershell -ExecutionPolicy Bypass -File .\install.ps1
+  3. Abra o CaboCam pelo Menu Iniciar.
+
+USO
+  1. Conecte o iPhone ao PC pelo cabo, desbloqueie-o e toque em "Confiar".
+  2. Abra o app CaboCam no iPhone e mantenha-o em primeiro plano.
+  3. No CaboCam do Windows a transmissão inicia sozinha. Em Teams, Zoom, Chrome,
+     OBS ou no app Câmera, escolha a câmera "CaboCam".
+  - Sem cabo: use "Conectar por IP" e informe o endereço do iPhone (porta 7878).
+
+DESINSTALAÇÃO
+  Execute uninstall.ps1 (use -RemoveSettings para apagar também as configurações).
+
+PROBLEMAS COMUNS
+  - "Serviço Apple não encontrado": instale "Dispositivos Apple" na Microsoft Store.
+  - "Driver da câmera virtual não instalado": execute install.ps1 como administrador.
+  - "Requer Windows 11": a câmera virtual só funciona no Windows 11.
+  - Logs: %LocalAppData%\CaboCam\logs\    Configurações: %AppData%\CaboCam\settings.json
