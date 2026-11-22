@@ -21,6 +21,8 @@ public sealed class AppSettings
     public bool AutoStart { get; set; } = true;
     public bool StartMinimized { get; set; }
     public bool CloseToTray { get; set; } = true;
+    /// <summary>Show every setting (false = basic mode with the essentials only).</summary>
+    public bool AdvancedMode { get; set; }
 
     /// <summary>GitHub "owner/repo" whose latest Release carries CaboCam-iOS-unsigned.ipa.</summary>
     public string IosReleaseRepo { get; set; } = "delanohelio/cabocam";

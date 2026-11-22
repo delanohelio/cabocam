@@ -81,6 +81,10 @@ public sealed class VirtualCameraService : IDisposable
 
     public static string DriverDllPath => Path.Combine(AppContext.BaseDirectory, "CaboCam.VirtualCamera.dll");
 
+    /// <summary>%ProgramData%\CaboCam\logs: vcam.log written by the camera inside the Frame Server.</summary>
+    public static string VcamLogDirectory =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "CaboCam", "logs");
+
     /// <summary>DLL path registered for the media source CLSID (HKLM), or null.</summary>
     public static string? RegisteredDllPath()
     {
@@ -108,7 +112,10 @@ public sealed class VirtualCameraService : IDisposable
         var dir = AppContext.BaseDirectory.TrimEnd('\\');
         var sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
         // The Frame Server runs as LocalService: grant read/execute to Users and LOCAL SERVICE, then register.
+        var logs = VcamLogDirectory;
         var script = $"\"{sys}\\icacls.exe\" \"{dir}\" /grant *S-1-5-32-545:(OI)(CI)RX *S-1-5-19:(OI)(CI)RX /T /C /Q >nul"
+                   + $" & mkdir \"{logs}\" 2>nul"
+                   + $" & \"{sys}\\icacls.exe\" \"{logs}\" /grant *S-1-5-6:(OI)(CI)M *S-1-5-19:(OI)(CI)M *S-1-5-32-545:(OI)(CI)M *S-1-15-2-1:(OI)(CI)M /C /Q >nul"
                    + $" & \"{sys}\\regsvr32.exe\" /s \"{dll}\"";
         var psi = new ProcessStartInfo(Path.Combine(sys, "cmd.exe"), $"/d /c \"{script}\"")
         {

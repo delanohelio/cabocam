@@ -80,6 +80,13 @@ namespace
         return list;
     }
 
+    // True when the decoder can already describe an output type for the current input type.
+    bool HasOutputTypes(IMFTransform* mft)
+    {
+        ComPtr<IMFMediaType> t;
+        return SUCCEEDED(mft->GetOutputAvailableType(0, 0, &t)) && t;
+    }
+
     HRESULT ConfigureInput(IMFTransform* mft, int codec)
     {
         // Low-latency: both the MF attribute and the CODECAPI property (either may be unsupported).
@@ -97,18 +104,35 @@ namespace
         }
 
         const GUID subtype = (codec == CC_CODEC_H264) ? MFVideoFormat_H264 : MFVideoFormat_HEVC;
+        // Pass 0: no frame size (the H.264 decoder learns it from the SPS).
+        // Pass 1: with a placeholder size. The HEVC decoder (HEVC Video Extensions) accepts an
+        // input type without size but then offers no output type, so ProcessInput fails with
+        // MF_E_TRANSFORM_TYPE_NOT_SET forever. With a size it offers NV12 and later signals a
+        // stream change to the real resolution.
+        // HEVC goes straight to the full description: it lists output types without a frame
+        // size but then rejects them in SetOutputType (MF_E_ATTRIBUTENOTFOUND).
         HRESULT hr = E_FAIL;
-        for (int pass = 0; pass < 2 && FAILED(hr); ++pass)
+        for (int pass = (codec == CC_CODEC_HEVC) ? 1 : 0; pass < 2; ++pass)
         {
             ComPtr<IMFMediaType> in;
             hr = MFCreateMediaType(&in);
             if (FAILED(hr)) return hr;
             in->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
             in->SetGUID(MF_MT_SUBTYPE, subtype);
-            in->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
-            if (pass == 1)   // some decoders insist on a frame size up front
+            if (pass == 0)
+            {
+                in->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
+            }
+            else
+            {
+                // Full description: the HEVC decoder only lists output types with all of these.
+                in->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
                 MFSetAttributeSize(in.Get(), MF_MT_FRAME_SIZE, 1920, 1080);
+                MFSetAttributeRatio(in.Get(), MF_MT_FRAME_RATE, 30, 1);
+                MFSetAttributeRatio(in.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+            }
             hr = mft->SetInputType(0, in.Get(), 0);
+            if (SUCCEEDED(hr) && HasOutputTypes(mft)) return hr;
         }
         return hr;
     }
@@ -182,7 +206,37 @@ HRESULT cc_decoder::NegotiateOutput()
     if (!chosen) return MF_E_INVALIDMEDIATYPE;
 
     HRESULT hr = mft->SetOutputType(0, chosen.Get(), 0);
-    if (FAILED(hr)) return hr;
+    if (FAILED(hr))
+    {
+        // The HEVC decoder offers NV12 types without frame size/rate before the first frame and
+        // then rejects them (MF_E_ATTRIBUTENOTFOUND). Fill the gaps from the input type.
+        ComPtr<IMFMediaType> filled;
+        ComPtr<IMFMediaType> in;
+        if (SUCCEEDED(MFCreateMediaType(&filled)) && SUCCEEDED(chosen->CopyAllItems(filled.Get())) &&
+            SUCCEEDED(mft->GetInputCurrentType(0, &in)))
+        {
+            UINT32 w = 0, h = 0, n = 0, d = 0;
+            if (FAILED(MFGetAttributeSize(filled.Get(), MF_MT_FRAME_SIZE, &w, &h)) || w == 0)
+            {
+                if (FAILED(MFGetAttributeSize(in.Get(), MF_MT_FRAME_SIZE, &w, &h)) || w == 0) { w = 1920; h = 1080; }
+                MFSetAttributeSize(filled.Get(), MF_MT_FRAME_SIZE, w, h);
+            }
+            if (FAILED(MFGetAttributeRatio(filled.Get(), MF_MT_FRAME_RATE, &n, &d)) || n == 0)
+            {
+                if (FAILED(MFGetAttributeRatio(in.Get(), MF_MT_FRAME_RATE, &n, &d)) || n == 0 || d == 0) { n = 30; d = 1; }
+                MFSetAttributeRatio(filled.Get(), MF_MT_FRAME_RATE, n, d);
+            }
+            if (FAILED(MFGetAttributeRatio(filled.Get(), MF_MT_PIXEL_ASPECT_RATIO, &n, &d)))
+                MFSetAttributeRatio(filled.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
+            UINT32 il = 0;
+            if (FAILED(filled->GetUINT32(MF_MT_INTERLACE_MODE, &il)))
+                filled->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
+            const HRESULT h2 = mft->SetOutputType(0, filled.Get(), 0);
+            if (SUCCEEDED(h2)) hr = h2;
+            else CcLog(L"SetOutputType NV12 failed 0x%08X / filled 0x%08X", static_cast<unsigned>(hr), static_cast<unsigned>(h2));
+        }
+        if (FAILED(hr)) return hr;
+    }
 
     ComPtr<IMFMediaType> cur;
     hr = mft->GetOutputCurrentType(0, &cur);

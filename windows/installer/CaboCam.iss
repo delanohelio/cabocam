@@ -56,7 +56,14 @@ Name: "{autodesktop}\CaboCam"; Filename: "{app}\CaboCam.exe"; WorkingDir: "{app}
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "CaboCam"; \
     ValueData: """{app}\CaboCam.exe"""; Flags: uninsdeletevalue; Tasks: autostart
 
+[Dirs]
+Name: "{commonappdata}\CaboCam\logs"
+
 [Run]
+; Diagnostics folder written by the virtual camera inside the Frame Server (vcam.log):
+; services, LOCAL SERVICE, users and app containers may write there.
+Filename: "{sys}\icacls.exe"; Parameters: """{commonappdata}\CaboCam\logs"" /grant *S-1-5-6:(OI)(CI)M *S-1-5-19:(OI)(CI)M *S-1-5-32-545:(OI)(CI)M *S-1-15-2-1:(OI)(CI)M /C /Q"; \
+    Flags: runhidden waituntilterminated
 ; The Frame Server runs as LocalService: grant read/execute to Users and LOCAL SERVICE.
 Filename: "{sys}\icacls.exe"; Parameters: """{app}"" /grant *S-1-5-32-545:(OI)(CI)RX *S-1-5-19:(OI)(CI)RX /T /C /Q"; \
     Flags: runhidden waituntilterminated; StatusMsg: "Ajustando permissões..."
