@@ -92,6 +92,20 @@ public partial class App : Application
     {
         try
         {
+            var res = GetResourceStream(new Uri("pack://application:,,,/Assets/CaboCam.ico"));
+            if (res is not null)
+            {
+                using var s = res.Stream;
+                return new Icon(s, Forms.SystemInformation.SmallIconSize);
+            }
+        }
+        catch
+        {
+            // fall back to the drawn icon below
+        }
+
+        try
+        {
             using var bmp = new Bitmap(32, 32);
             using (var g = Graphics.FromImage(bmp))
             {

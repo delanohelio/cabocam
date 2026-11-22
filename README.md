@@ -22,9 +22,9 @@ Detalhes técnicos: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/PROTOC
 
 O workflow `.github/workflows/ios.yml` compila no GitHub Actions (macOS) um `CaboCam-iOS-unsigned.ipa` sem assinatura e o anexa ao Release quando você cria uma tag `v*`. O app do Windows assina e instala esse `.ipa` com o seu Apple ID, usando o [plumesign](https://github.com/claration/impactor) (CLI do Impactor, licença MIT), que vem junto do CaboCam.
 
-1. Conecte o iPhone no cabo e ative **Ajustes → Privacidade e Segurança → Modo de Desenvolvedor**.
-2. No CaboCam do Windows, no card **App do iPhone**, clique em **Renovar / atualizar app**.
-3. Na primeira vez, entre com o Apple ID e digite o código de verificação. A senha não é salva. Só a sessão da Apple fica guardada em `%AppData%\PlumeImpactor\accounts.json`. Prefira um Apple ID secundário.
+1. Conecte o iPhone no cabo. Se **Ajustes → Privacidade e Segurança → Modo de Desenvolvedor** não aparecer, clique em **Mostrar Modo Dev no iPhone** no card **App do iPhone**. Ative a opção, deixe o iPhone reiniciar e confirme **Ativar**.
+2. No card **App do iPhone**, escolha a versão (por padrão, a mais recente do GitHub) e clique em **Renovar / instalar versão**.
+3. Só na primeira vez (ou depois de **Sair**), entre com o Apple ID e digite o código de verificação. A senha não é salva. Só a sessão da Apple fica guardada em `%AppData%\PlumeImpactor\accounts.json`. Prefira um Apple ID secundário.
 4. Com conta gratuita, o app expira em **7 dias**. O card mostra a data e avisa 2 dias antes. Para renovar, basta clicar de novo com o iPhone no cabo.
 
 O botão **Instalar .ipa…** assina um `.ipa` local, por exemplo o artefato de um build que ainda não virou Release.
@@ -44,9 +44,9 @@ Veja [ios/README.md](ios/README.md).
 
 ## 2. Compilar e instalar no Windows
 
-O build roda no GitHub Actions (`.github/workflows/windows.yml`). Envie o projeto para um repositório seu no GitHub. Em *Actions*, baixe o artefato **CaboCam-Windows-x64**. Se você criar uma tag `v1.0.0`, o workflow também publica um Release com o zip.
+O build roda no GitHub Actions (`.github/workflows/windows.yml`). Envie o projeto para um repositório seu no GitHub. Cada tag `v*` publica um Release com o instalador **CaboCam-Setup-x.y.z.exe** e o zip. Em builds sem tag, baixe o artefato **CaboCam-Setup** em *Actions*.
 
-No PC, descompacte o arquivo, clique com o botão direito em `install.ps1` e escolha **Executar com o PowerShell**. O script pede permissão de administrador uma única vez, para registrar a câmera virtual.
+No PC, rode o **CaboCam-Setup**. Ele pede permissão de administrador, instala em `C:\Program Files\CaboCam`, registra a câmera virtual e cria os atalhos no Menu Iniciar e, se você marcar, na Área de Trabalho. Para remover, use *Configurações → Aplicativos*. O zip continua disponível com o `install.ps1` para quem preferir.
 
 ## 3. Usar
 
@@ -57,4 +57,4 @@ No PC, descompacte o arquivo, clique com o botão direito em `install.ps1` e esc
 
 ## Status
 
-O código foi escrito sem compilar no Windows nem no iOS, porque este Mac não tem Xcode nem MSVC. Apenas o app desktop em C# compilou aqui. Espere uma rodada de correções no primeiro build do GitHub Actions e no primeiro build do Xcode.
+O app iOS e o app Windows compilam no GitHub Actions. A assinatura pelo Windows usa o plumesign; o ícone do Windows é gerado do ícone do iOS por `windows/desktop/Assets/make-icon.ps1`.

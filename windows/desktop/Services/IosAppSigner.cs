@@ -21,7 +21,11 @@ public sealed class IosSignException : Exception
     public bool NeedsLogin { get; }
 }
 
-public sealed record IpaRelease(string Tag, string FileName, string DownloadUrl, long Size);
+public sealed record IpaRelease(string Tag, string FileName, string DownloadUrl, long Size, DateTimeOffset? PublishedAt = null, bool IsLatest = false)
+{
+    public string Label => (IsLatest ? $"{Tag} (mais recente)" : Tag)
+                           + (PublishedAt is { } p ? $" · {p.LocalDateTime:dd/MM/yyyy}" : "");
+}
 
 /// <summary>
 /// Signs and installs the CaboCam iOS app with the user's Apple ID by driving
@@ -59,24 +63,35 @@ public static class IosAppSigner
     // .ipa from GitHub Releases
     // =============================================================================
 
-    public static async Task<IpaRelease> GetLatestReleaseAsync(string repo, CancellationToken ct)
+    /// <summary>Published (non-draft, non-prerelease) releases that carry an .ipa, newest first.</summary>
+    public static async Task<List<IpaRelease>> GetReleasesAsync(string repo, CancellationToken ct)
     {
-        var url = $"https://api.github.com/repos/{repo}/releases/latest";
+        var url = $"https://api.github.com/repos/{repo}/releases?per_page=30";
         using var resp = await Http.GetAsync(url, ct).ConfigureAwait(false);
         if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
-            throw new IosSignException($"Nenhum Release publicado em github.com/{repo}. Crie uma tag v* para o workflow gerar o .ipa.");
+            throw new IosSignException($"Repositório github.com/{repo} não encontrado (ou privado).");
         resp.EnsureSuccessStatusCode();
 
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
-        var root = doc.RootElement;
-        var tag = root.GetProperty("tag_name").GetString() ?? "?";
-        foreach (var asset in root.GetProperty("assets").EnumerateArray())
+        var list = new List<IpaRelease>();
+        foreach (var rel in doc.RootElement.EnumerateArray())
         {
-            var name = asset.GetProperty("name").GetString() ?? "";
-            if (!name.EndsWith(IpaAssetSuffix, StringComparison.OrdinalIgnoreCase)) continue;
-            return new IpaRelease(tag, name, asset.GetProperty("browser_download_url").GetString()!, asset.GetProperty("size").GetInt64());
+            if (rel.GetProperty("draft").GetBoolean() || rel.GetProperty("prerelease").GetBoolean()) continue;
+            var tag = rel.GetProperty("tag_name").GetString() ?? "?";
+            DateTimeOffset? published = rel.TryGetProperty("published_at", out var p) && p.ValueKind == JsonValueKind.String
+                ? p.GetDateTimeOffset() : null;
+            foreach (var asset in rel.GetProperty("assets").EnumerateArray())
+            {
+                var name = asset.GetProperty("name").GetString() ?? "";
+                if (!name.EndsWith(IpaAssetSuffix, StringComparison.OrdinalIgnoreCase)) continue;
+                list.Add(new IpaRelease(tag, name, asset.GetProperty("browser_download_url").GetString()!,
+                                        asset.GetProperty("size").GetInt64(), published));
+                break;
+            }
         }
-        throw new IosSignException($"O Release {tag} de {repo} não tem um arquivo .ipa.");
+        list.Sort((a, b) => Nullable.Compare(b.PublishedAt, a.PublishedAt));
+        if (list.Count > 0) list[0] = list[0] with { IsLatest = true };
+        return list;
     }
 
     /// <summary>Downloads the release .ipa into the local cache (reused if already there).</summary>
@@ -162,12 +177,16 @@ public static class IosAppSigner
     public static async Task LogoutAsync(CancellationToken ct) =>
         await RunAsync(new[] { "account", "logout" }, null, null, ct).ConfigureAwait(false);
 
-    /// <summary>Registers the device, signs the .ipa with the saved Apple ID and installs it over USB.</summary>
-    public static async Task SignAndInstallAsync(string ipaPath, string udid, IProgress<string>? log,
+    /// <summary>
+    /// Registers the device, signs the .ipa with the saved Apple ID and installs it over USB.
+    /// Note: despite its name, plumesign's <c>--udid</c> expects the numeric usbmuxd DeviceID.
+    /// </summary>
+    public static async Task SignAndInstallAsync(string ipaPath, int usbmuxDeviceId, IProgress<string>? log,
                                                  IProgress<int>? percent, CancellationToken ct)
     {
         var result = await RunAsync(
-            new[] { "sign", "--package", ipaPath, "--apple-id", "--register-and-install", "--udid", udid },
+            new[] { "sign", "--package", ipaPath, "--apple-id", "--register-and-install",
+                    "--udid", usbmuxDeviceId.ToString(System.Globalization.CultureInfo.InvariantCulture) },
             p => p.StandardInput.Close(), // any unexpected interactive prompt fails instead of hanging
             line =>
             {

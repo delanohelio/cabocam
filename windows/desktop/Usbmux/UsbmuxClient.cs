@@ -203,6 +203,24 @@ public static class UsbmuxClient
     }
 
     /// <summary>
+    /// Reads the host pairing record usbmuxd keeps for the device (created when the user tapped
+    /// "Trust"). Contains HostID, SystemBUID, HostCertificate and HostPrivateKey (PEM).
+    /// </summary>
+    public static async Task<Dictionary<string, object?>> ReadPairRecordAsync(string udid, CancellationToken ct = default)
+    {
+        using var socket = await OpenSocketAsync(ct).ConfigureAwait(false);
+        using var stream = new NetworkStream(socket, ownsSocket: false);
+        var request = BaseRequest("ReadPairRecord");
+        request["PairRecordID"] = udid;
+        await SendAsync(stream, request, ct).ConfigureAwait(false);
+        var reply = await ReadAsync(stream, ct).ConfigureAwait(false);
+        ThrowIfError(reply);
+        if (reply.TryGetValue("PairRecordData", out var v) && v is byte[] data && data.Length > 0)
+            return Plist.ParseAny(data);
+        throw new InvalidDataException("Registro de pareamento não encontrado. Desconecte o iPhone, reconecte e toque em \"Confiar\".");
+    }
+
+    /// <summary>
     /// Opens a tunnel to <paramref name="port"/> on the device. After a successful Result the same
     /// socket is the raw TCP stream to the device. The returned stream owns the socket.
     /// </summary>

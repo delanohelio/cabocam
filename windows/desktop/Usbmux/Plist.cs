@@ -80,6 +80,14 @@ public static class Plist
         }
     }
 
+    /// <summary>Parses a dict plist in either XML or binary ("bplist00") form.</summary>
+    public static Dictionary<string, object?> ParseAny(byte[] data)
+    {
+        if (data.Length >= 8 && Encoding.ASCII.GetString(data, 0, 8) == "bplist00")
+            return BinaryPlist.ParseDict(data);
+        return ParseDict(data);
+    }
+
     /// <summary>Parses an XML plist whose root value is a dict.</summary>
     public static Dictionary<string, object?> ParseDict(byte[] data)
     {
