@@ -62,6 +62,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _conn = new ConnectionManager(settings);
         _video = new VideoPipeline();
+        IosApp = new IosAppViewModel(settings);
 
         ToggleStreamCommand = new RelayCommand(ToggleStream, () => IsConnected);
         ConnectByIpCommand = new RelayCommand(ConnectByIp);
@@ -93,7 +94,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         _statsTimer.Start();
         _conn.Start();
+        IosApp.Start();
     }
+
+    /// <summary>"App do iPhone" card (sign + install the iOS app with an Apple ID).</summary>
+    public IosAppViewModel IosApp { get; }
 
     private void PostUi(Action action)
     {
@@ -1009,5 +1014,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         foreach (var t in _debouncers.Values) t.Stop();
         _conn.Dispose();
         _video.Dispose();
+        IosApp.Dispose();
     }
 }

@@ -28,9 +28,38 @@ public partial class MainWindow : Window
             return dlg.ShowDialog() == true ? dlg.Result : null;
         };
 
+        vm.IosApp.AskLogin = initial =>
+        {
+            ShowWindowForPrompt();
+            var dlg = new AppleIdLoginDialog(initial) { Owner = this };
+            return dlg.ShowDialog() == true ? (dlg.Email, dlg.Password) : null;
+        };
+        vm.IosApp.AskCode = _ =>
+        {
+            ShowWindowForPrompt();
+            var dlg = new TwoFactorDialog { Owner = this };
+            return dlg.ShowDialog() == true ? dlg.Code : null;
+        };
+        vm.IosApp.PickIpa = () =>
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Escolha o CaboCam .ipa",
+                Filter = "App iOS (*.ipa)|*.ipa",
+            };
+            return dlg.ShowDialog(this) == true ? dlg.FileName : null;
+        };
+
         // Track slider drags so incoming phone state does not fight the user.
         AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler((s, e) => { if (SliderKey(e.OriginalSource) is { } k) _vm.BeginDrag(k); }));
         AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler((s, e) => { if (SliderKey(e.OriginalSource) is { } k) _vm.EndDrag(k); }));
+    }
+
+    private void ShowWindowForPrompt()
+    {
+        if (!IsVisible) Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
     }
 
     private static string? SliderKey(object? source)

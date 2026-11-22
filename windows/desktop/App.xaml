@@ -171,6 +171,23 @@
                 </Setter>
             </Style>
 
+            <Style TargetType="PasswordBox">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="CaretBrush" Value="{StaticResource TextBrush}"/>
+                <Setter Property="Background" Value="{StaticResource ControlBrush}"/>
+                <Setter Property="Padding" Value="8,6"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="PasswordBox">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="8"
+                                    BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- ComboBox -->
             <ControlTemplate x:Key="ComboToggleTemplate" TargetType="ToggleButton">
                 <Border x:Name="Bd" Background="{StaticResource ControlBrush}" CornerRadius="8" SnapsToDevicePixels="True">

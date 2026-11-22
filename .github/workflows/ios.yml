@@ -1,0 +1,89 @@
+name: iOS
+
+# Builds an UNSIGNED CaboCam.ipa. The Windows desktop app downloads it from the
+# latest GitHub Release and signs/installs it with the user's Apple ID (plumesign).
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+          echo "::notice title=Xcode::$(xcodebuild -version | tr '\n' ' ')"
+
+      - name: Ensure iOS platform is installed
+        run: |
+          if ! xcodebuild -showsdks | grep -q iphoneos; then
+            echo "::notice::iOS SDK missing, downloading platform"
+            xcodebuild -downloadPlatform iOS
+          fi
+
+      - name: Build (unsigned, device)
+        working-directory: ios
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project CaboCam.xcodeproj \
+            -target CaboCam \
+            -configuration Release \
+            -sdk iphoneos \
+            SYMROOT="$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee xcodebuild.log || {
+              # Surface errors as annotations (readable without signing in to GitHub).
+              grep -E "error:|is not installed|Unable to|failed" xcodebuild.log | sort -u | head -20 | while IFS= read -r line; do
+                echo "::error title=xcodebuild::${line}"
+              done
+              tail -5 xcodebuild.log | while IFS= read -r line; do echo "::error title=xcodebuild tail::${line}"; done
+              exit 1
+            }
+
+      - name: Package unsigned .ipa
+        working-directory: ios
+        run: |
+          APP="build/Release-iphoneos/CaboCam.app"
+          test -d "$APP"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../CaboCam-iOS-unsigned.ipa Payload)
+          ls -la CaboCam-iOS-unsigned.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CaboCam-iOS-unsigned
+          path: ios/CaboCam-iOS-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ios/CaboCam-iOS-unsigned.ipa

@@ -131,9 +131,11 @@ final class VideoEncoder: @unchecked Sendable {
     private func createSessionLocked(width: Int, height: Int) -> Bool {
         let cfg = config
         var created: VTCompressionSession?
-        let spec: [String: Any] = [
-            kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder as String: true
-        ]
+        // iPhones always encode in hardware; the explicit key only exists on iOS 17.4+.
+        var spec: [String: Any] = [:]
+        if #available(iOS 17.4, *) {
+            spec[kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder as String] = true
+        }
         let status = VTCompressionSessionCreate(
             allocator: kCFAllocatorDefault,
             width: Int32(width),
