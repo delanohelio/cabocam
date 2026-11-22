@@ -20,7 +20,10 @@
 // Returns 0 on success, or the failing HRESULT (e.g. REGDB_E_CLASSNOTREG when the
 // COM DLL was not registered by install.ps1; 0x80070005 on Windows < 11 / access).
 CC_API int32_t cc_vcam_register(void);
-CC_API void    cc_vcam_unregister(void);
+CC_API int32_t cc_vcam_unregister(void);               // HRESULT of IMFVirtualCamera::Remove (0 if none)
+
+// Diagnostics: receive native log lines (UTF-16, no prefix/newline). nullptr disables.
+CC_API void    cc_set_log_callback(void (__cdecl *callback)(const wchar_t* message));
 CC_API int32_t cc_vcam_is_registered(void);           // 1 / 0
 
 // ---- Frame sink (writer side of the shared memory) ---------------------------

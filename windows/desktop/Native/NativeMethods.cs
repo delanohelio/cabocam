@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -17,7 +18,24 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport(Lib)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    public static partial void cc_vcam_unregister();
+    public static partial int cc_vcam_unregister();
+
+    [LibraryImport(Lib)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static partial void cc_set_log_callback(delegate* unmanaged[Cdecl]<char*, void> callback);
+
+    /// <summary>Routes native CcLog lines into the app log (%LocalAppData%\CaboCam\logs).</summary>
+    public static void EnableNativeLog()
+    {
+        try { cc_set_log_callback(&OnNativeLog); }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException) { /* older/missing DLL */ }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static void OnNativeLog(char* message)
+    {
+        try { CaboCam.Services.Log.Info("native: " + new string(message)); } catch { /* never throw into native */ }
+    }
 
     [LibraryImport(Lib)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]

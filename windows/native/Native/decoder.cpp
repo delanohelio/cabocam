@@ -460,9 +460,15 @@ CC_API int32_t cc_decoder_push(cc_decoder* dec, const uint8_t* annexb, int32_t l
     }
     if (hr == MF_E_TRANSFORM_STREAM_CHANGE || hr == MF_E_TRANSFORM_TYPE_NOT_SET)
     {
-        if (SUCCEEDED(dec->NegotiateOutput()))
+        const HRESULT nh = dec->NegotiateOutput();
+        if (SUCCEEDED(nh))
             hr = dec->mft->ProcessInput(0, sample.Get(), 0);
+        else
+            CcLog(L"push: output renegotiation failed 0x%08X", static_cast<unsigned>(nh));
     }
+    if (FAILED(hr))
+        CcLog(L"push: ProcessInput 0x%08X (len %d, key %d)", static_cast<unsigned>(hr), length,
+              IsKeyAccessUnit(dec->codec, annexb, length) ? 1 : 0);
     return FAILED(hr) ? static_cast<int32_t>(hr) : 0;
 }
 

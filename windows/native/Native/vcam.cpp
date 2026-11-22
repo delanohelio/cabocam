@@ -56,15 +56,22 @@ CC_API int32_t cc_vcam_register(void)
     return 0;
 }
 
-CC_API void cc_vcam_unregister(void)
+CC_API int32_t cc_vcam_unregister(void)
 {
     std::lock_guard<std::mutex> lk(g_mutex);
-    if (!g_vcam) return;
+    if (!g_vcam) return 0;
     HRESULT hr = g_vcam->Remove();
     if (FAILED(hr)) CcLog(L"IMFVirtualCamera::Remove failed 0x%08X", static_cast<unsigned>(hr));
-    g_vcam->Shutdown();
+    const HRESULT sh = g_vcam->Shutdown();
+    if (FAILED(sh)) CcLog(L"IMFVirtualCamera::Shutdown failed 0x%08X", static_cast<unsigned>(sh));
     g_vcam.Reset();
     CcLog(L"virtual camera removed");
+    return static_cast<int32_t>(hr);
+}
+
+CC_API void cc_set_log_callback(void (__cdecl *callback)(const wchar_t* message))
+{
+    CcLogSink() = callback;
 }
 
 CC_API int32_t cc_vcam_is_registered(void)

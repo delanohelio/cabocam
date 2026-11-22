@@ -15,6 +15,16 @@ namespace CaboCam.Video;
 public sealed unsafe class VideoPipeline : IDisposable
 {
     private const int QueueCapacity = 90;
+    /// <summary>~200 ms at 30 fps (~100 ms at 60 fps): more than this queued means we are behind.</summary>
+    private const int MaxQueuedFrames = 6;
+
+    private long _latencyDrops;
+    private long _lastDropLog;
+    private double _decodeMsSum;
+    private int _decodeMsCount;
+    private long _decodeWindowStart = Environment.TickCount64;
+    private bool _dumpedFailure;
+    private VideoPacket? _lastKeyframe;
     private const int PreviewMaxWidth = 960;
     private const long PreviewIntervalMs = 33;       // ~30 fps
     private const long SinkRetryMs = 500;
@@ -64,16 +74,42 @@ public sealed unsafe class VideoPipeline : IDisposable
 
     public void AckPreview() => Volatile.Write(ref _previewPending, 0);
 
-    /// <summary>Queues a packet; never blocks. On overflow the backlog is dropped and a keyframe requested.</summary>
+    /// <summary>
+    /// Queues a packet; never blocks. Live video must not build up delay: when decoding falls
+    /// behind by more than <see cref="MaxQueuedFrames"/> the backlog is dropped and decoding
+    /// resumes at the next keyframe (which is requested from the phone).
+    /// </summary>
     public void Enqueue(VideoPacket packet)
     {
         if (_queue.IsAddingCompleted) return;
-        if (_queue.TryAdd(packet)) return;
 
-        while (_queue.TryTake(out _)) { }
-        _waitKeyframe = true;
-        RequestKeyframe();
+        if (_queue.Count >= MaxQueuedFrames)
+        {
+            while (_queue.TryTake(out _)) { }
+            _waitKeyframe = true;
+            Interlocked.Increment(ref _latencyDrops);
+            long now = Environment.TickCount64;
+            if (now - _lastDropLog > 5000)
+            {
+                _lastDropLog = now;
+                Log.Warn($"Vídeo atrasado: fila descartada (decodificação {AvgDecodeMs:0.0} ms/quadro, {Interlocked.Read(ref _latencyDrops)} descartes)");
+            }
+            RequestKeyframe();
+            if (!packet.IsKeyframe) return;
+        }
+
+        if (!_queue.TryAdd(packet))
+        {
+            while (_queue.TryTake(out _)) { }
+            _waitKeyframe = true;
+            RequestKeyframe();
+        }
     }
+
+    /// <summary>Times the latency guard dropped queued video.</summary>
+    public long LatencyDrops => Interlocked.Read(ref _latencyDrops);
+    /// <summary>Average push+pull time per access unit (ms), last ~second.</summary>
+    public double AvgDecodeMs { get; private set; }
 
     /// <summary>Drops queued data and forces decoder re-creation at the next keyframe (new connection).</summary>
     public void Reset()
@@ -169,7 +205,9 @@ public sealed unsafe class VideoPipeline : IDisposable
             _decoderCodec = codec;
         }
         _waitKeyframe = false;
+        if (packet.IsKeyframe) _lastKeyframe = packet;
 
+        long t0 = Stopwatch.GetTimestamp();
         int rc;
         fixed (byte* p = packet.Payload)
         {
@@ -177,7 +215,8 @@ public sealed unsafe class VideoPipeline : IDisposable
         }
         if (rc < 0)
         {
-            Log.Warn($"cc_decoder_push falhou: 0x{rc:X8}");
+            Log.Warn($"cc_decoder_push falhou: 0x{rc:X8} ({FrameWidth}x{FrameHeight}, {packet.DataLength} bytes, key={packet.IsKeyframe}, hevc={packet.IsHevc})");
+            DumpFailure(packet);
             DestroyDecoder();
             _waitKeyframe = true;
             RequestKeyframe();
@@ -185,6 +224,44 @@ public sealed unsafe class VideoPipeline : IDisposable
         }
 
         PullFrames();
+        TrackDecodeTime(t0);
+    }
+
+    private void TrackDecodeTime(long startTimestamp)
+    {
+        _decodeMsSum += (Stopwatch.GetTimestamp() - startTimestamp) * 1000.0 / Stopwatch.Frequency;
+        _decodeMsCount++;
+        long now = Environment.TickCount64;
+        if (now - _decodeWindowStart >= 1000 && _decodeMsCount > 0)
+        {
+            AvgDecodeMs = _decodeMsSum / _decodeMsCount;
+            _decodeMsSum = 0;
+            _decodeMsCount = 0;
+            _decodeWindowStart = now;
+        }
+    }
+
+    /// <summary>
+    /// Saves the last keyframe and the failing access unit (Annex-B) once per run, so a decoder
+    /// failure can be reproduced offline: %LocalAppData%\CaboCam\logs\decoder-failure-*.h264
+    /// </summary>
+    private void DumpFailure(VideoPacket failing)
+    {
+        if (_dumpedFailure) return;
+        _dumpedFailure = true;
+        try
+        {
+            var path = System.IO.Path.Combine(Log.Directory, $"decoder-failure-{DateTime.Now:yyyyMMdd-HHmmss}.{(failing.IsHevc ? "h265" : "h264")}");
+            using var fs = System.IO.File.Create(path);
+            if (_lastKeyframe is { } key && !ReferenceEquals(key, failing))
+                fs.Write(key.Payload, key.DataOffset, key.DataLength);
+            fs.Write(failing.Payload, failing.DataOffset, failing.DataLength);
+            Log.Info($"Amostra do vídeo que falhou salva em {path}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao salvar amostra do decodificador", ex);
+        }
     }
 
     private void PullFrames()

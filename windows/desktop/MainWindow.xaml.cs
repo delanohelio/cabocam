@@ -75,6 +75,7 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             Hide();
+            (Application.Current as App)?.ShowTrayHintOnce();
             return;
         }
         base.OnClosing(e);
