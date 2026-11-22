@@ -41,16 +41,13 @@ namespace
         int64_t pts = 0;
     };
 
-    ComPtr<IMFTransform> CreateDecoderMft(int codec)
+    // Candidate decoders, best first. Registered MFTs come from MFTEnumEx; the direct
+    // CoCreateInstance of CLSID_CMSH264DecoderMFT is only a last resort: on recent Windows 11
+    // builds it returns an object that rejects every H.264 input type (MF_E_INVALIDMEDIATYPE),
+    // while the same decoder activated through MFTEnumEx works.
+    std::vector<ComPtr<IMFTransform>> CreateDecoderCandidates(int codec)
     {
-        ComPtr<IMFTransform> mft;
-        if (codec == CC_CODEC_H264)
-        {
-            if (SUCCEEDED(CoCreateInstance(kClsidMsH264Decoder, nullptr, CLSCTX_INPROC_SERVER,
-                                           IID_PPV_ARGS(&mft))) && mft)
-                return mft;
-            mft.Reset();
-        }
+        std::vector<ComPtr<IMFTransform>> list;
 
         MFT_REGISTER_TYPE_INFO in{};
         in.guidMajorType = MFMediaType_Video;
@@ -61,19 +58,59 @@ namespace
         const HRESULT hr = MFTEnumEx(MFT_CATEGORY_VIDEO_DECODER,
                                      MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_SORTANDFILTER,
                                      &in, nullptr, &acts, &count);
-        if (FAILED(hr) || !acts) return mft;
-        for (UINT32 i = 0; i < count; ++i)
+        if (SUCCEEDED(hr) && acts)
         {
-            if (!mft)
+            for (UINT32 i = 0; i < count; ++i)
             {
                 ComPtr<IMFTransform> cand;
                 if (SUCCEEDED(acts[i]->ActivateObject(IID_PPV_ARGS(&cand))) && cand)
-                    mft = cand;
+                    list.push_back(cand);
+                acts[i]->Release();
             }
-            acts[i]->Release();
+            CoTaskMemFree(acts);
         }
-        CoTaskMemFree(acts);
-        return mft;
+
+        if (codec == CC_CODEC_H264)
+        {
+            ComPtr<IMFTransform> direct;
+            if (SUCCEEDED(CoCreateInstance(kClsidMsH264Decoder, nullptr, CLSCTX_INPROC_SERVER,
+                                           IID_PPV_ARGS(&direct))) && direct)
+                list.push_back(direct);
+        }
+        return list;
+    }
+
+    HRESULT ConfigureInput(IMFTransform* mft, int codec)
+    {
+        // Low-latency: both the MF attribute and the CODECAPI property (either may be unsupported).
+        ComPtr<IMFAttributes> attrs;
+        if (SUCCEEDED(mft->GetAttributes(&attrs)) && attrs)
+            attrs->SetUINT32(MF_LOW_LATENCY, TRUE);
+        ComPtr<ICodecAPI> api;
+        if (SUCCEEDED(mft->QueryInterface(IID_PPV_ARGS(&api))))
+        {
+            VARIANT v;
+            VariantInit(&v);
+            v.vt = VT_BOOL;
+            v.boolVal = VARIANT_TRUE;
+            api->SetValue(&kCodecApiLowLatency, &v);
+        }
+
+        const GUID subtype = (codec == CC_CODEC_H264) ? MFVideoFormat_H264 : MFVideoFormat_HEVC;
+        HRESULT hr = E_FAIL;
+        for (int pass = 0; pass < 2 && FAILED(hr); ++pass)
+        {
+            ComPtr<IMFMediaType> in;
+            hr = MFCreateMediaType(&in);
+            if (FAILED(hr)) return hr;
+            in->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+            in->SetGUID(MF_MT_SUBTYPE, subtype);
+            in->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
+            if (pass == 1)   // some decoders insist on a frame size up front
+                MFSetAttributeSize(in.Get(), MF_MT_FRAME_SIZE, 1920, 1080);
+            hr = mft->SetInputType(0, in.Get(), 0);
+        }
+        return hr;
     }
 
     // Annex-B scan: does this access unit contain an IRAP/IDR (or parameter set)?
@@ -359,45 +396,25 @@ CC_API cc_decoder* cc_decoder_create(int32_t codec)
     CcEnsureComInit();
     if (FAILED(CcEnsureMfStartup())) return nullptr;
 
-    ComPtr<IMFTransform> mft = CreateDecoderMft(codec);
+    ComPtr<IMFTransform> mft;
+    const auto candidates = CreateDecoderCandidates(codec);
+    for (size_t i = 0; i < candidates.size(); ++i)
+    {
+        const HRESULT hr = ConfigureInput(candidates[i].Get(), codec);
+        if (SUCCEEDED(hr))
+        {
+            mft = candidates[i];
+            break;
+        }
+        CcLog(L"decoder candidate %u rejected input type 0x%08X", static_cast<unsigned>(i), static_cast<unsigned>(hr));
+    }
     if (!mft)
     {
-        CcLog(L"no decoder MFT for codec %d", codec);
+        CcLog(L"no usable decoder MFT for codec %d (%u candidates)", codec, static_cast<unsigned>(candidates.size()));
         return nullptr;
     }
 
-    // Low-latency: both the MF attribute and the CODECAPI property (either may be unsupported).
-    ComPtr<IMFAttributes> attrs;
-    if (SUCCEEDED(mft->GetAttributes(&attrs)) && attrs)
-        attrs->SetUINT32(MF_LOW_LATENCY, TRUE);
-    ComPtr<ICodecAPI> api;
-    if (SUCCEEDED(mft.As(&api)))
-    {
-        VARIANT v;
-        VariantInit(&v);
-        v.vt = VT_BOOL;
-        v.boolVal = VARIANT_TRUE;
-        api->SetValue(&kCodecApiLowLatency, &v);
-    }
-
-    const GUID subtype = (codec == CC_CODEC_H264) ? MFVideoFormat_H264 : MFVideoFormat_HEVC;
-    HRESULT hr = E_FAIL;
-    for (int pass = 0; pass < 2 && FAILED(hr); ++pass)
-    {
-        ComPtr<IMFMediaType> in;
-        if (FAILED(MFCreateMediaType(&in))) return nullptr;
-        in->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-        in->SetGUID(MF_MT_SUBTYPE, subtype);
-        in->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_MixedInterlaceOrProgressive);
-        if (pass == 1)   // some decoders insist on a frame size up front
-            MFSetAttributeSize(in.Get(), MF_MT_FRAME_SIZE, 1920, 1080);
-        hr = mft->SetInputType(0, in.Get(), 0);
-    }
-    if (FAILED(hr))
-    {
-        CcLog(L"SetInputType failed 0x%08X", static_cast<unsigned>(hr));
-        return nullptr;
-    }
+    HRESULT hr = S_OK;
 
     cc_decoder* dec = new (std::nothrow) cc_decoder();
     if (!dec) return nullptr;
