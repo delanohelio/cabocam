@@ -115,7 +115,7 @@ Every keyframe is preceded **in the same access unit** by its parameter sets
 {"type":"streamStarted","codec":"h264","width":1920,"height":1080,"fps":30}
 {"type":"streamStopped"}
 {"type":"error","message":"Formato não suportado pela câmera"}
-{"type":"pong","t":123456}
+{"type":"pong","t":123456,"phoneUs":98765432100}   // phoneUs: phone capture clock (same base as video pts), optional
 ```
 
 Rules:

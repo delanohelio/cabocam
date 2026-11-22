@@ -60,6 +60,37 @@ public sealed class ConnectionManager : IDisposable
     public CapabilitiesMessage? Capabilities { get; private set; }
     public DeviceState? LastState { get; private set; }
     public int LatencyMs { get; private set; } = -1;
+
+    // ---- Phone clock offset (phone capture clock ms - Environment.TickCount64) ------------
+    private readonly object _clockGate = new();
+    private readonly Queue<(long Rtt, long Offset)> _clockSamples = new();
+    private long? _clockOffsetMs;
+
+    /// <summary>
+    /// Estimated phone-clock minus PC-clock (ms), from the lowest-RTT pong of the last ~20 s.
+    /// Null until the phone app reports its clock (older app versions do not).
+    /// </summary>
+    public long? PhoneClockOffsetMs { get { lock (_clockGate) return _clockOffsetMs; } }
+
+    private void UpdateClockOffset(long phoneMs, long sentAt, long rtt)
+    {
+        lock (_clockGate)
+        {
+            _clockSamples.Enqueue((rtt, phoneMs - (sentAt + rtt / 2)));
+            while (_clockSamples.Count > 10) _clockSamples.Dequeue();
+            var best = _clockSamples.MinBy(s => s.Rtt);
+            _clockOffsetMs = best.Offset;
+        }
+    }
+
+    private void ResetClockOffset()
+    {
+        lock (_clockGate)
+        {
+            _clockSamples.Clear();
+            _clockOffsetMs = null;
+        }
+    }
     public bool IsManual => _manual is not null;
 
     public event Action? StatusChanged;
@@ -362,9 +393,12 @@ public sealed class ConnectionManager : IDisposable
         client.StreamStarted += _ => SetState(ConnectionState.Streaming, "");
         client.StreamStopped += () => SetState(ConnectionState.Connected, "");
         client.ErrorReceived += msg => { Log.Warn("Erro do iPhone: " + msg); PhoneError?.Invoke(msg); };
-        client.PongReceived += t =>
+        client.PongReceived += (t, phoneUs) =>
         {
-            LatencyMs = (int)Math.Max(0, Environment.TickCount64 - t);
+            long now = Environment.TickCount64;
+            long rtt = Math.Max(0, now - t);
+            LatencyMs = (int)rtt;
+            if (phoneUs is { } pu) UpdateClockOffset(pu / 1000, t, rtt);
             StatusChanged?.Invoke();
         };
         client.VideoReceived += p => VideoReceived?.Invoke(p);
@@ -463,6 +497,7 @@ public sealed class ConnectionManager : IDisposable
         Capabilities = null;
         LastState = null;
         LatencyMs = -1;
+        ResetClockOffset();
         StatusChanged?.Invoke();
     }
 
