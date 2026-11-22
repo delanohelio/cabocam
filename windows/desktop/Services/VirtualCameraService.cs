@@ -1,5 +1,9 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using CaboCam.Native;
 
 namespace CaboCam.Services;
@@ -36,7 +40,7 @@ public sealed class VirtualCameraService : IDisposable
             switch ((uint)hr)
             {
                 case 0x80040154: // REGDB_E_CLASSNOTREG
-                    Set(VcamStatus.NotInstalled, "Driver da câmera virtual não instalado — execute install.ps1 como administrador");
+                    Set(VcamStatus.NotInstalled, "Driver da câmera virtual não instalado.");
                     break;
                 case 0x80070005: // E_ACCESSDENIED
                     Set(VcamStatus.RequiresWindows11, "Requer Windows 11");
@@ -61,6 +65,50 @@ public sealed class VirtualCameraService : IDisposable
             Log.Error("Erro ao registrar câmera virtual", ex);
             Set(VcamStatus.Failed, "Erro ao criar a câmera virtual: " + ex.Message);
         }
+    }
+
+    public static string DriverDllPath => Path.Combine(AppContext.BaseDirectory, "CaboCam.VirtualCamera.dll");
+
+    /// <summary>
+    /// Registers the virtual camera COM DLL as administrator (UAC prompt), the same as the
+    /// installer does, then retries creating the camera. Returns null on success or an error.
+    /// </summary>
+    public async Task<string?> InstallDriverAsync()
+    {
+        var dll = DriverDllPath;
+        if (!File.Exists(dll)) return $"CaboCam.VirtualCamera.dll não encontrado em {AppContext.BaseDirectory}. Reinstale o CaboCam.";
+
+        var dir = AppContext.BaseDirectory.TrimEnd('\\');
+        var sys = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        // The Frame Server runs as LocalService: grant read/execute to Users and LOCAL SERVICE, then register.
+        var script = $"\"{sys}\\icacls.exe\" \"{dir}\" /grant *S-1-5-32-545:(OI)(CI)RX *S-1-5-19:(OI)(CI)RX /T /C /Q >nul"
+                   + $" & \"{sys}\\regsvr32.exe\" /s \"{dll}\"";
+        var psi = new ProcessStartInfo(Path.Combine(sys, "cmd.exe"), $"/d /c \"{script}\"")
+        {
+            UseShellExecute = true,
+            Verb = "runas",
+            WindowStyle = ProcessWindowStyle.Hidden,
+        };
+
+        try
+        {
+            using var p = Process.Start(psi) ?? throw new InvalidOperationException("processo não iniciou");
+            await p.WaitForExitAsync().ConfigureAwait(false);
+            Log.Info($"Instalação do driver: regsvr32 saiu com {p.ExitCode}");
+            if (p.ExitCode != 0) return $"regsvr32 falhou (código {p.ExitCode}).";
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) // ERROR_CANCELLED
+        {
+            return "Instalação cancelada: a permissão de administrador foi negada.";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao instalar o driver", ex);
+            return "Falha ao instalar o driver: " + ex.Message;
+        }
+
+        Register();
+        return Status == VcamStatus.Active ? null : Message;
     }
 
     private void Poll()

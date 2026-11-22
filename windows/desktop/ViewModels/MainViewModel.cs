@@ -67,6 +67,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ToggleStreamCommand = new RelayCommand(ToggleStream, () => IsConnected);
         ConnectByIpCommand = new RelayCommand(ConnectByIp);
         UseUsbCommand = new RelayCommand(() => { LastError = ""; _conn.UseUsb(); });
+        InstallDriverCommand = new RelayCommand(InstallDriver, () => !_installingDriver);
         ZoomPresetCommand = new RelayCommand(p => { if (p is ZoomPreset zp) SetZoomRaw(zp.Raw, ramp: true); });
 
         _conn.StatusChanged += () => PostUi(RefreshConnection);
@@ -112,6 +113,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ToggleStreamCommand { get; }
     public ICommand ConnectByIpCommand { get; }
     public ICommand UseUsbCommand { get; }
+    public RelayCommand InstallDriverCommand { get; }
     public ICommand ZoomPresetCommand { get; }
 
     /// <summary>Set by the window: shows the "host:port" prompt, returns null if cancelled.</summary>
@@ -282,6 +284,31 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ => BadBrush,
         };
         VcamInUse = _vcam.InUse;
+        NeedsDriver = _vcam.Status == VcamStatus.NotInstalled;
+    }
+
+    private bool _needsDriver;
+    public bool NeedsDriver { get => _needsDriver; private set => Set(ref _needsDriver, value); }
+
+    private bool _installingDriver;
+
+    private async void InstallDriver()
+    {
+        if (_installingDriver) return;
+        _installingDriver = true;
+        InstallDriverCommand.RaiseCanExecuteChanged();
+        try
+        {
+            VcamText = "Instalando o driver (confirme a permissão de administrador)…";
+            var err = await System.Threading.Tasks.Task.Run(() => _vcam.InstallDriverAsync());
+            RefreshVcam();
+            if (err is not null) VcamText = err;
+        }
+        finally
+        {
+            _installingDriver = false;
+            InstallDriverCommand.RaiseCanExecuteChanged();
+        }
     }
 
     // =============================================================================

@@ -27,6 +27,8 @@ O workflow `.github/workflows/ios.yml` compila no GitHub Actions (macOS) um `Cab
 3. Só na primeira vez (ou depois de **Sair**), entre com o Apple ID e digite o código de verificação. A senha não é salva. Só a sessão da Apple fica guardada em `%AppData%\PlumeImpactor\accounts.json`. Prefira um Apple ID secundário.
 4. Com conta gratuita, o app expira em **7 dias**. O card mostra a data e avisa 2 dias antes. Para renovar, basta clicar de novo com o iPhone no cabo.
 
+Se o iPhone mostrar **"Desenvolvedor não confiável"** ao abrir o app (acontece uma vez por Apple ID), vá em **Ajustes → Geral → VPN e Gerenciamento de Dispositivo → App de Desenvolvedor → seu Apple ID → Confiar**. O iPhone precisa estar com internet. O botão **Ajuda** do card mostra esse passo a passo.
+
 O botão **Instalar .ipa…** assina um `.ipa` local, por exemplo o artefato de um build que ainda não virou Release.
 
 ### Pelo Xcode (Mac)

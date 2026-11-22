@@ -67,6 +67,12 @@
                         </StackPanel>
                         <TextBlock Text="Em uso por um aplicativo" Foreground="{StaticResource AccentHoverBrush}" FontSize="12"
                                    Margin="16,4,0,0" Visibility="{Binding VcamInUse, Converter={StaticResource BoolToVis}}"/>
+                        <StackPanel Visibility="{Binding NeedsDriver, Converter={StaticResource BoolToVis}}" Margin="16,8,0,0">
+                            <TextBlock Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap"
+                                       Text="Sem o driver, Teams, Zoom e outros apps não veem a câmera CaboCam. A instalação pede permissão de administrador uma vez."/>
+                            <Button Content="Instalar driver da câmera (admin)" Command="{Binding InstallDriverCommand}"
+                                    Style="{StaticResource PrimaryButton}" Margin="0,8,0,0" HorizontalAlignment="Left"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -145,7 +151,33 @@
                             <Button Content="Sair" Command="{Binding LogoutCommand}" Style="{StaticResource ChipButton}"/>
                             <Button Content="Cancelar" Command="{Binding CancelCommand}" Style="{StaticResource ChipButton}"
                                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="{Binding HelpButtonText}" Command="{Binding ToggleHelpCommand}" Style="{StaticResource ChipButton}"/>
                         </WrapPanel>
+
+                        <Border Visibility="{Binding ShowHelp, Converter={StaticResource BoolToVis}}" Margin="0,12,0,0"
+                                Padding="12,10" CornerRadius="8" Background="{StaticResource ControlBrush}">
+                            <StackPanel>
+                                <TextBlock Text="Antes de instalar (uma vez)" FontWeight="SemiBold" FontSize="12"/>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Text="1. No iPhone: Ajustes → Privacidade e Segurança → Modo de Desenvolvedor → ativar. Se a opção não aparecer, clique em &quot;Mostrar Modo Dev no iPhone&quot;."/>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                                           Text="2. O iPhone reinicia. Desbloqueie e toque em &quot;Ativar&quot;."/>
+
+                                <TextBlock Text="Depois de instalar (uma vez por Apple ID)" FontWeight="SemiBold" FontSize="12" Margin="0,10,0,0"/>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                           Text="Se o iPhone disser &quot;Desenvolvedor Corporativo Não Confiável&quot; (ou &quot;não confiável&quot;):"/>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                                           Text="1. Ajustes → Geral → VPN e Gerenciamento de Dispositivo."/>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                                           Text="2. Em &quot;App de Desenvolvedor&quot;, toque no seu Apple ID."/>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                                           Text="3. Toque em &quot;Confiar&quot; e confirme. O iPhone precisa estar com internet."/>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0"
+                                           Text="4. Abra o CaboCam no iPhone e deixe-o em primeiro plano."/>
+                                <TextBlock Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Text="As renovações de 7 dias usam o mesmo certificado e não pedem para confiar de novo."/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
             </StackPanel>

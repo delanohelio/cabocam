@@ -33,6 +33,9 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
         CancelCommand = new RelayCommand(() => _cts?.Cancel(), () => IsBusy);
         RevealDevModeCommand = new RelayCommand(() => _ = RunRevealDevModeAsync(), () => !IsBusy);
         RefreshReleasesCommand = new RelayCommand(() => _ = LoadReleasesAsync(), () => !IsBusy);
+        ToggleHelpCommand = new RelayCommand(() => ShowHelp = !ShowHelp);
+        // First run (nothing installed yet): show the steps up front.
+        _showHelp = settings.Current.IosSignedAt is null;
 
         _clock = new DispatcherTimer(DispatcherPriority.Background, _ui) { Interval = TimeSpan.FromMinutes(30) };
         _clock.Tick += (_, _) => RefreshExpiry();
@@ -66,6 +69,16 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
     public RelayCommand LogoutCommand { get; }
     public RelayCommand CancelCommand { get; }
     public RelayCommand RevealDevModeCommand { get; }
+    public RelayCommand ToggleHelpCommand { get; }
+
+    /// <summary>Step-by-step for Developer Mode and "Untrusted Developer" (shown after an install).</summary>
+    private bool _showHelp;
+    public bool ShowHelp
+    {
+        get => _showHelp;
+        set { if (Set(ref _showHelp, value)) OnPropertyChanged(nameof(HelpButtonText)); }
+    }
+    public string HelpButtonText => _showHelp ? "Ocultar ajuda" : "Ajuda";
     public RelayCommand RefreshReleasesCommand { get; }
 
     // ---- bindable state ----------------------------------------------------------------
@@ -275,7 +288,8 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
         s.IosSignedUdid = device.SerialNumber;
         _settings.SaveSoon();
         RefreshExpiry();
-        Activity = "App instalado. Abra o CaboCam no iPhone.";
+        Activity = "App instalado no iPhone.";
+        ShowHelp = true;
     }, keepActivity: true);
 
     // =============================================================================
