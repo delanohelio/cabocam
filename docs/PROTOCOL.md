@@ -67,7 +67,7 @@ Every keyframe is preceded **in the same access unit** by its parameter sets
   "whiteBalanceMode":"continuous",   // "continuous" | "locked" | "custom"
   "temperature":5000, "tint":0,      // with "custom"
   "torch":0.0,                       // 0 = off, (0,1] = level
-  "stabilization":"auto",            // "off"|"standard"|"cinematic"|"cinematicExtended"|"auto"
+  "stabilization":"auto",            // "off"|"standard"|"cinematic"|"cinematicExtended"|"auto" (auto = low-latency only: previewOptimized/standard/off)
   "hdr":true,                        // video HDR if supported by format (false = off, true = on/auto)
   "lowLightBoost":true,
   "centerStage":false,               // front camera only (class-level setting, cooperative mode)

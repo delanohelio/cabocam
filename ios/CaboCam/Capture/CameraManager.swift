@@ -534,19 +534,30 @@ final class CameraManager: NSObject, @unchecked Sendable {
             appliedMirror = false
         }
         if connection.isVideoStabilizationSupported, let device = currentDevice {
-            let wanted = Self.stabilizationMode(controls.stabilization)
             connection.preferredVideoStabilizationMode =
-                device.activeFormat.isVideoStabilizationModeSupported(wanted) ? wanted : .auto
+                Self.resolveStabilization(controls.stabilization, format: device.activeFormat)
         }
     }
 
-    private static func stabilizationMode(_ name: String) -> AVCaptureVideoStabilizationMode {
+    /// Live video must stay low-latency: AVFoundation's `.auto` picks cinematic stabilization on
+    /// most 1080p/4K formats, which buffers ~1–1.5 s of frames. Our "auto" therefore only picks
+    /// low-latency modes (preview-optimized, then standard, else off). Cinematic modes are used
+    /// only when chosen explicitly.
+    private static func resolveStabilization(_ name: String, format: AVCaptureDevice.Format) -> AVCaptureVideoStabilizationMode {
+        func supported(_ m: AVCaptureVideoStabilizationMode) -> Bool { format.isVideoStabilizationModeSupported(m) }
         switch name {
-        case "off": return .off
-        case "standard": return .standard
-        case "cinematic": return .cinematic
-        case "cinematicExtended": return .cinematicExtended
-        default: return .auto
+        case "off":
+            return .off
+        case "standard":
+            return supported(.standard) ? .standard : .off
+        case "cinematic":
+            return supported(.cinematic) ? .cinematic : (supported(.standard) ? .standard : .off)
+        case "cinematicExtended":
+            return supported(.cinematicExtended) ? .cinematicExtended
+                : (supported(.cinematic) ? .cinematic : (supported(.standard) ? .standard : .off))
+        default: // "auto" (and "previewOptimized")
+            if #available(iOS 17.0, *), supported(.previewOptimized) { return .previewOptimized }
+            return supported(.standard) ? .standard : .off
         }
     }
 
@@ -557,7 +568,9 @@ final class CameraManager: NSObject, @unchecked Sendable {
         case .cinematic: return "cinematic"
         case .cinematicExtended: return "cinematicExtended"
         case .auto: return "auto"
-        default: return "standard"
+        default:
+            if #available(iOS 17.0, *), mode == .previewOptimized { return "previewOptimized" }
+            return "standard"
         }
     }
 
