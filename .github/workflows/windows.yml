@@ -28,6 +28,19 @@ jobs:
       - name: Build native (CMake)
         run: cmake --build build/native --config Release
 
+      # plumesign (Impactor CLI, MIT) signs and installs the iOS app with the user's Apple ID.
+      - name: Download plumesign
+        shell: pwsh
+        env:
+          PLUMESIGN_VERSION: v2.7.3
+          PLUMESIGN_SHA256: 94664749fbbceb9a16bf89583f473dafb9b35c8d058a9d8665dc963b3453c6fc
+        run: |
+          New-Item -ItemType Directory -Force build/tools | Out-Null
+          $url = "https://github.com/claration/impactor/releases/download/$env:PLUMESIGN_VERSION/plumesign-windows-x86_64.exe"
+          Invoke-WebRequest -Uri $url -OutFile build/tools/plumesign.exe
+          $hash = (Get-FileHash build/tools/plumesign.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne $env:PLUMESIGN_SHA256) { throw "plumesign.exe SHA256 mismatch: $hash" }
+
       - name: Publish desktop app
         run: >
           dotnet publish windows/desktop/CaboCam.Desktop.csproj

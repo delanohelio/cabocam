@@ -35,4 +35,14 @@
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- plumesign.exe (Impactor CLI) signs/installs the iOS app. CI downloads it to build\tools\. -->
+  <PropertyGroup>
+    <PlumesignExe Condition="'$(PlumesignExe)' == ''">$(MSBuildThisFileDirectory)..\..\build\tools\plumesign.exe</PlumesignExe>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(PlumesignExe)')">
+    <None Include="$(PlumesignExe)" Link="plumesign.exe"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

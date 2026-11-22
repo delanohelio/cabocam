@@ -1,0 +1,20 @@
+<Window x:Class="CaboCam.Views.AppleIdLoginDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Entrar com Apple ID" Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="{StaticResource BgBrush}" FontFamily="Segoe UI Variable Text, Segoe UI">
+    <StackPanel Margin="20">
+        <TextBlock Text="Entrar com Apple ID" Style="{StaticResource CardTitle}"/>
+        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                   Text="Usado para gerar o certificado de desenvolvedor gratuito e assinar o app do iPhone. A senha não é salva: o CaboCam guarda apenas a sessão da Apple (em %AppData%\PlumeImpactor). Recomendado: um Apple ID secundário."/>
+        <TextBlock Text="E-mail" Style="{StaticResource FieldLabel}"/>
+        <TextBox x:Name="EmailBox" FontSize="14"/>
+        <TextBlock Text="Senha" Style="{StaticResource FieldLabel}"/>
+        <PasswordBox x:Name="PasswordBox" FontSize="14"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="Cancelar" IsCancel="True" Margin="0,0,8,0"/>
+            <Button Content="Entrar" IsDefault="True" Style="{StaticResource PrimaryButton}" Click="OnOk"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

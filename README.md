@@ -18,6 +18,19 @@ Detalhes técnicos: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/PROTOC
 
 ## 1. Instalar no iPhone
 
+### Pelo app do Windows (sem Mac)
+
+O workflow `.github/workflows/ios.yml` compila no GitHub Actions (macOS) um `CaboCam-iOS-unsigned.ipa` sem assinatura e o anexa ao Release quando você cria uma tag `v*`. O app do Windows assina e instala esse `.ipa` com o seu Apple ID, usando o [plumesign](https://github.com/claration/impactor) (CLI do Impactor, licença MIT), que vem junto do CaboCam.
+
+1. Conecte o iPhone no cabo e ative **Ajustes → Privacidade e Segurança → Modo de Desenvolvedor**.
+2. No CaboCam do Windows, no card **App do iPhone**, clique em **Renovar / atualizar app**.
+3. Na primeira vez, entre com o Apple ID e digite o código de verificação. A senha não é salva. Só a sessão da Apple fica guardada em `%AppData%\PlumeImpactor\accounts.json`. Prefira um Apple ID secundário.
+4. Com conta gratuita, o app expira em **7 dias**. O card mostra a data e avisa 2 dias antes. Para renovar, basta clicar de novo com o iPhone no cabo.
+
+O botão **Instalar .ipa…** assina um `.ipa` local, por exemplo o artefato de um build que ainda não virou Release.
+
+### Pelo Xcode (Mac)
+
 ```bash
 brew install xcodegen
 ```

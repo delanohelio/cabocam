@@ -22,6 +22,13 @@ public sealed class AppSettings
     public bool StartMinimized { get; set; }
     public bool CloseToTray { get; set; } = true;
 
+    /// <summary>GitHub "owner/repo" whose latest Release carries CaboCam-iOS-unsigned.ipa.</summary>
+    public string IosReleaseRepo { get; set; } = "delanohelio/cabocam";
+    /// <summary>Last successful sign + install of the iOS app (free Apple ID profile lasts 7 days).</summary>
+    public DateTimeOffset? IosSignedAt { get; set; }
+    public string? IosSignedVersion { get; set; }
+    public string? IosSignedUdid { get; set; }
+
     /// <summary>Last setControl values per cameraId (zoom, focus, exposure, white balance, stabilization, hdr...).</summary>
     public Dictionary<string, Dictionary<string, JsonElement>> Controls { get; set; } = new();
 }
