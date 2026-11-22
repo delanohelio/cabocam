@@ -1,3 +1,4 @@
+import CoreMedia
 import Foundation
 import Network
 
@@ -275,6 +276,10 @@ final class StreamServer: @unchecked Sendable {
            object["type"] as? String == "ping" {
             var reply: [String: Any] = ["type": "pong"]
             if let t = object["t"] { reply["t"] = t }
+            // Phone "now" on the capture clock (host time, same base as video pts): lets the PC
+            // estimate the clock offset and show the real camera-to-PC delay.
+            let now = CMClockGetTime(CMClockGetHostTimeClock())
+            reply["phoneUs"] = CMTimeConvertScale(now, timescale: 1_000_000, method: .roundHalfAwayFromZero).value
             if let data = try? JSONSerialization.data(withJSONObject: reply) {
                 write(PacketCodec.encode(.message, payload: data))
             }

@@ -136,18 +136,33 @@ final class VideoEncoder: @unchecked Sendable {
         if #available(iOS 17.4, *) {
             spec[kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder as String] = true
         }
-        let status = VTCompressionSessionCreate(
-            allocator: kCFAllocatorDefault,
-            width: Int32(width),
-            height: Int32(height),
-            codecType: cfg.codec.cmCodecType,
-            encoderSpecification: spec as CFDictionary,
-            imageBufferAttributes: nil,
-            compressedDataAllocator: nil,
-            outputCallback: nil,       // output is delivered through the per-frame output handler
-            refcon: nil,
-            compressionSessionOut: &created
-        )
+        // Low-latency rate control (video-conferencing mode, H.264): each frame is emitted as soon
+        // as it is encoded, with no look-ahead buffering. Fall back to the normal mode if refused.
+        var lowLatency = cfg.codec != .hevc
+        if lowLatency {
+            spec[kVTVideoEncoderSpecification_EnableLowLatencyRateControl as String] = true
+        }
+        func create(_ spec: [String: Any]) -> OSStatus {
+            VTCompressionSessionCreate(
+                allocator: kCFAllocatorDefault,
+                width: Int32(width),
+                height: Int32(height),
+                codecType: cfg.codec.cmCodecType,
+                encoderSpecification: spec as CFDictionary,
+                imageBufferAttributes: nil,
+                compressedDataAllocator: nil,
+                outputCallback: nil,       // output is delivered through the per-frame output handler
+                refcon: nil,
+                compressionSessionOut: &created
+            )
+        }
+        var status = create(spec)
+        if status != noErr && lowLatency {
+            spec.removeValue(forKey: kVTVideoEncoderSpecification_EnableLowLatencyRateControl as String)
+            lowLatency = false
+            created = nil
+            status = create(spec)
+        }
         guard status == noErr, let s = created else {
             reportError("Não foi possível criar o codificador \(cfg.codec.displayName) (\(status))")
             return false
@@ -157,6 +172,8 @@ final class VideoEncoder: @unchecked Sendable {
         set(s, kVTCompressionPropertyKey_ProfileLevel,
             cfg.codec == .hevc ? kVTProfileLevel_HEVC_Main_AutoLevel : kVTProfileLevel_H264_High_AutoLevel)
         set(s, kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse)
+        // Emit every frame before accepting the next one (no internal frame queue).
+        set(s, kVTCompressionPropertyKey_MaxFrameDelayCount, NSNumber(value: 0))
         set(s, kVTCompressionPropertyKey_PrioritizeEncodingSpeedOverQuality, kCFBooleanTrue)
         // Signal BT.709 limited range (what the camera's 420v buffers are) in the bitstream VUI.
         set(s, kVTCompressionPropertyKey_ColorPrimaries, kCMFormatDescriptionColorPrimaries_ITU_R_709_2)

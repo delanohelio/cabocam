@@ -30,7 +30,8 @@ public sealed class ProtocolClient : IDisposable
     public event Action<StreamStartedMessage>? StreamStarted;
     public event Action? StreamStopped;
     public event Action<string>? ErrorReceived;
-    public event Action<long>? PongReceived;
+    /// <summary>(t echoed back, phone capture-clock time in µs if the app sends it).</summary>
+    public event Action<long, long?>? PongReceived;
     public event Action<VideoPacket>? VideoReceived;
 
     public Task SendHelloAsync(CancellationToken ct) =>
@@ -104,7 +105,11 @@ public sealed class ProtocolClient : IDisposable
                 ErrorReceived?.Invoke(root.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() ?? "" : "");
                 break;
             case MessageTypes.Pong:
-                if (root.TryGetProperty("t", out var t) && t.TryGetInt64(out var tv)) PongReceived?.Invoke(tv);
+                if (root.TryGetProperty("t", out var t) && t.TryGetInt64(out var tv))
+                {
+                    long? phoneUs = root.TryGetProperty("phoneUs", out var pu) && pu.TryGetInt64(out var puv) ? puv : null;
+                    PongReceived?.Invoke(tv, phoneUs);
+                }
                 break;
             case "hello":
                 if (root.Deserialize<HelloMessage>(ProtocolJson.Options) is { } h) HelloReceived?.Invoke(h);

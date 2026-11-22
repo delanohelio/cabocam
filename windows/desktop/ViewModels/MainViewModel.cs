@@ -63,6 +63,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _conn = new ConnectionManager(settings);
         _video = new VideoPipeline();
         IosApp = new IosAppViewModel(settings);
+        _video.PhoneClockOffsetMs = () => _conn.PhoneClockOffsetMs;
 
         ToggleStreamCommand = new RelayCommand(ToggleStream, () => IsConnected);
         ConnectByIpCommand = new RelayCommand(ConnectByIp);
@@ -367,6 +368,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         string codec = string.Equals(st?.Codec, "hevc", StringComparison.OrdinalIgnoreCase) ? "HEVC" : "H.264";
         OverlayText = IsStreaming && _video.FrameWidth > 0
             ? $"{fps:0.0} fps · {mbps:0.0} Mbps · {_video.FrameWidth}×{_video.FrameHeight} · {codec} · decodificação {_video.AvgDecodeMs:0} ms"
+              + (_video.CaptureToDecodeMs >= 0 ? $" · atraso câmera→PC {_video.CaptureToDecodeMs} ms" : "")
               + (_video.LatencyDrops > 0 ? $" · {_video.LatencyDrops} descartes p/ atraso" : "")
             : "";
 

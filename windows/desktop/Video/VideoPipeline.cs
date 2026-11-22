@@ -302,12 +302,48 @@ public sealed unsafe class VideoPipeline : IDisposable
         }
     }
 
+    /// <summary>Phone clock minus PC clock (ms), or null when unknown. Set by the owner.</summary>
+    public Func<long?>? PhoneClockOffsetMs { get; set; }
+
+    /// <summary>Camera capture → decoded on the PC, averaged over ~1 s (ms); -1 when unknown.</summary>
+    public int CaptureToDecodeMs { get; private set; } = -1;
+
+    private long _e2eSum;
+    private int _e2eCount;
+    private long _e2eWindowStart = Environment.TickCount64;
+    private long _lastE2eLog;
+
+    private void TrackEndToEnd(long ptsHns)
+    {
+        long now = Environment.TickCount64;
+        if (PhoneClockOffsetMs?.Invoke() is { } offset)
+        {
+            long captureOnPcClock = ptsHns / 10_000 - offset;
+            long lat = now - captureOnPcClock;
+            if (lat > -1000 && lat < 60_000) { _e2eSum += Math.Max(0, lat); _e2eCount++; }
+        }
+        if (now - _e2eWindowStart >= 1000)
+        {
+            CaptureToDecodeMs = _e2eCount > 0 ? (int)(_e2eSum / _e2eCount) : -1;
+            if (now - _lastE2eLog >= 10_000)
+            {
+                _lastE2eLog = now;
+                Log.Info($"Vídeo: {FrameWidth}x{FrameHeight} {DecodedFps:0.0} fps, decodificação {AvgDecodeMs:0.0} ms, " +
+                         $"atraso câmera→PC {(CaptureToDecodeMs >= 0 ? CaptureToDecodeMs + " ms" : "desconhecido")}, fila {_queue.Count}");
+            }
+            _e2eSum = 0;
+            _e2eCount = 0;
+            _e2eWindowStart = now;
+        }
+    }
+
     private void HandleFrame(int w, int h, long ptsHns)
     {
         FrameWidth = w;
         FrameHeight = h;
         Interlocked.Increment(ref _framesDecoded);
         UpdateFps();
+        TrackEndToEnd(ptsHns);
 
         // 1) virtual camera
         long now = Environment.TickCount64;
