@@ -29,9 +29,24 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+          echo "::notice title=Xcode::$(xcodebuild -version | tr '\n' ' ')"
+
+      - name: Ensure iOS platform is installed
+        run: |
+          if ! xcodebuild -showsdks | grep -q iphoneos; then
+            echo "::notice::iOS SDK missing, downloading platform"
+            xcodebuild -downloadPlatform iOS
+          fi
+
       - name: Build (unsigned, device)
         working-directory: ios
+        shell: bash
         run: |
+          set -o pipefail
           xcodebuild \
             -project CaboCam.xcodeproj \
             -target CaboCam \
@@ -41,7 +56,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee xcodebuild.log || {
+              # Surface errors as annotations (readable without signing in to GitHub).
+              grep -E "error:|is not installed|Unable to|failed" xcodebuild.log | sort -u | head -20 | while IFS= read -r line; do
+                echo "::error title=xcodebuild::${line}"
+              done
+              tail -5 xcodebuild.log | while IFS= read -r line; do echo "::error title=xcodebuild tail::${line}"; done
+              exit 1
+            }
 
       - name: Package unsigned .ipa
         working-directory: ios
