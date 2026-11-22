@@ -41,10 +41,20 @@ jobs:
           $hash = (Get-FileHash build/tools/plumesign.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($hash -ne $env:PLUMESIGN_SHA256) { throw "plumesign.exe SHA256 mismatch: $hash" }
 
+      - name: Compute version
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}" -like 'refs/tags/v*') { $v = "${{ github.ref_name }}".Substring(1) }
+          else { $v = "0.0.${{ github.run_number }}" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $v"
+
       - name: Publish desktop app
         run: >
           dotnet publish windows/desktop/CaboCam.Desktop.csproj
           -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false
+          -p:Version=${{ steps.ver.outputs.version }}
           -o dist/CaboCam
 
       - name: Assemble package
@@ -55,6 +65,24 @@ jobs:
           Copy-Item windows/installer/LEIA-ME.txt dist/CaboCam/ -Force
           Get-ChildItem dist/CaboCam | Select-Object Name, Length | Format-Table
           Compress-Archive -Path dist/CaboCam/* -DestinationPath dist/CaboCam-Windows-x64.zip -Force
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress | Out-Null
+          }
+          & $iscc /Q "/DAppVersion=${{ steps.ver.outputs.version }}" "/DSourceDir=$PWD\dist\CaboCam" "/DOutputDir=$PWD\dist" windows\installer\CaboCam.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
+          Get-ChildItem dist\CaboCam-Setup-*.exe | Select-Object Name, Length | Format-Table
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: CaboCam-Setup
+          path: dist/CaboCam-Setup-*.exe
+          if-no-files-found: error
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -67,5 +95,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/CaboCam-Windows-x64.zip
+          files: |
+            dist/CaboCam-Setup-*.exe
+            dist/CaboCam-Windows-x64.zip
           generate_release_notes: true

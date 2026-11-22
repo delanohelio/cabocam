@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +31,8 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
         LoginCommand = new RelayCommand(() => _ = RunLoginAsync(), () => !IsBusy);
         LogoutCommand = new RelayCommand(() => _ = RunLogoutAsync(), () => !IsBusy && IsLoggedIn);
         CancelCommand = new RelayCommand(() => _cts?.Cancel(), () => IsBusy);
+        RevealDevModeCommand = new RelayCommand(() => _ = RunRevealDevModeAsync(), () => !IsBusy);
+        RefreshReleasesCommand = new RelayCommand(() => _ = LoadReleasesAsync(), () => !IsBusy);
 
         _clock = new DispatcherTimer(DispatcherPriority.Background, _ui) { Interval = TimeSpan.FromMinutes(30) };
         _clock.Tick += (_, _) => RefreshExpiry();
@@ -39,6 +42,7 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
     public void Start()
     {
         _clock.Start();
+        _ = LoadReleasesAsync();
         if (!IosAppSigner.IsAvailable)
         {
             AccountText = "plumesign.exe não está instalado junto do CaboCam.";
@@ -61,6 +65,8 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
     public RelayCommand LoginCommand { get; }
     public RelayCommand LogoutCommand { get; }
     public RelayCommand CancelCommand { get; }
+    public RelayCommand RevealDevModeCommand { get; }
+    public RelayCommand RefreshReleasesCommand { get; }
 
     // ---- bindable state ----------------------------------------------------------------
     private string _expiryText = "";
@@ -118,6 +124,8 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
         LoginCommand.RaiseCanExecuteChanged();
         LogoutCommand.RaiseCanExecuteChanged();
         CancelCommand.RaiseCanExecuteChanged();
+        RevealDevModeCommand.RaiseCanExecuteChanged();
+        RefreshReleasesCommand.RaiseCanExecuteChanged();
     }
 
     // =============================================================================
@@ -208,6 +216,9 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
             if (localIpa is null) return;
         }
 
+        // The saved plumesign session is reused; only ask for the Apple ID when there is none
+        // (or when signing reports that the session is no longer valid).
+        if (!IsLoggedIn) await RefreshAccountAsync();
         if (!IsLoggedIn && !await RunLoginAsync()) return;
 
         var ok = await TryInstallAsync(localIpa);
@@ -233,8 +244,14 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
         }
         else
         {
-            Activity = "Procurando a versão mais recente no GitHub…";
-            var release = await IosAppSigner.GetLatestReleaseAsync(_settings.Current.IosReleaseRepo, ct);
+            var release = SelectedRelease;
+            if (release is null)
+            {
+                Activity = "Procurando versões no GitHub…";
+                await LoadReleasesCoreAsync(ct);
+                release = SelectedRelease ?? throw new IosSignException(
+                    $"Nenhum Release com .ipa em github.com/{_settings.Current.IosReleaseRepo}.");
+            }
             ipa = await IosAppSigner.DownloadAsync(release, log, ct);
             version = release.Tag;
         }
@@ -244,7 +261,7 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
         var pct = new Progress<int>(p => { Percent = p; Activity = $"Instalando no iPhone… {p}%"; });
         try
         {
-            await IosAppSigner.SignAndInstallAsync(ipa, device.SerialNumber, log, pct, ct);
+            await IosAppSigner.SignAndInstallAsync(ipa, device.DeviceId, log, pct, ct);
         }
         catch (IosSignException ex) when (ex.NeedsLogin)
         {
@@ -259,6 +276,52 @@ public sealed class IosAppViewModel : ObservableObject, IDisposable
         _settings.SaveSoon();
         RefreshExpiry();
         Activity = "App instalado. Abra o CaboCam no iPhone.";
+    }, keepActivity: true);
+
+    // =============================================================================
+    // Releases (version picker)
+    // =============================================================================
+
+    public ObservableCollection<IpaRelease> Releases { get; } = new();
+
+    private IpaRelease? _selectedRelease;
+    public IpaRelease? SelectedRelease { get => _selectedRelease; set => Set(ref _selectedRelease, value); }
+
+    private async Task LoadReleasesAsync()
+    {
+        try
+        {
+            await LoadReleasesCoreAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao listar Releases", ex);
+            if (!IsBusy) Error = ex is IosSignException ? ex.Message : "Não foi possível listar as versões no GitHub.";
+        }
+    }
+
+    private async Task LoadReleasesCoreAsync(CancellationToken ct)
+    {
+        var list = await IosAppSigner.GetReleasesAsync(_settings.Current.IosReleaseRepo, ct);
+        var keep = SelectedRelease?.Tag;
+        Releases.Clear();
+        foreach (var r in list) Releases.Add(r);
+        // Default = newest; keep an explicit older choice across refreshes.
+        SelectedRelease = (keep is null ? null : Releases.FirstOrDefault(r => r.Tag == keep && !r.IsLatest))
+                          ?? Releases.FirstOrDefault();
+    }
+
+    // =============================================================================
+    // Developer Mode
+    // =============================================================================
+
+    private Task RunRevealDevModeAsync() => Busy("Pedindo ao iPhone para mostrar o Modo de Desenvolvedor…", async ct =>
+    {
+        var device = await FindDeviceAsync(ct);
+        var err = await Lockdown.RevealDeveloperModeAsync(device, ct);
+        if (err is not null) throw new IosSignException("O iPhone recusou: " + err);
+        Activity = "Pronto. No iPhone: Ajustes → Privacidade e Segurança → Modo de Desenvolvedor (no fim da lista). " +
+                   "Ative, reinicie e confirme \"Ativar\".";
     }, keepActivity: true);
 
     private async Task<UsbmuxDevice> FindDeviceAsync(CancellationToken ct)
