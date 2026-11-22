@@ -557,8 +557,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         StabilizationOptions.Clear();
         foreach (var o in new[]
                  {
-                     new Option("auto", "Automática"), new Option("off", "Desligada"), new Option("standard", "Padrão"),
-                     new Option("cinematic", "Cinema"), new Option("cinematicExtended", "Cinema estendido"),
+                     new Option("auto", "Automática (baixo atraso)"), new Option("off", "Desligada (menor atraso)"),
+                     new Option("standard", "Padrão"),
+                     new Option("cinematic", "Cinema (atraso ~1 s)"), new Option("cinematicExtended", "Cinema estendido (atraso ~1,5 s)"),
                  })
             StabilizationOptions.Add(o);
         FocusOptions.Add(new Option("continuous", "Contínuo"));
