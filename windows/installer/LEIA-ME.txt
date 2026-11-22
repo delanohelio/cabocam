@@ -28,6 +28,7 @@ DESINSTALAÇÃO
 
 PROBLEMAS COMUNS
   - "Serviço Apple não encontrado": instale "Dispositivos Apple" na Microsoft Store.
-  - "Driver da câmera virtual não instalado": execute install.ps1 como administrador.
+  - "Driver da câmera virtual não instalado": clique em "Instalar driver da câmera (admin)"
+    no CaboCam (ou execute install.ps1 como administrador).
   - "Requer Windows 11": a câmera virtual só funciona no Windows 11.
   - Logs: %LocalAppData%\CaboCam\logs\    Configurações: %AppData%\CaboCam\settings.json
