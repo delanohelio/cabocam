@@ -479,6 +479,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (value is null || !Set(ref _formatKey, value)) return;
+            OnPropertyChanged(nameof(QualityKey));
             var f = Formats.FirstOrDefault(x => x.Key == value);
             if (f is null) return;
             _settings.Current.Width = f.Width;
@@ -545,6 +546,71 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public string BitrateLabel => $"{_bitrateMbps.ToString("0.#", Inv)} Mbps";
+
+    // =============================================================================
+    // Basic / advanced mode
+    // =============================================================================
+
+    /// <summary>Advanced mode shows every setting; basic mode only the essentials.</summary>
+    public bool IsAdvanced
+    {
+        get => _settings.Current.AdvancedMode;
+        set
+        {
+            if (_settings.Current.AdvancedMode == value) return;
+            _settings.Current.AdvancedMode = value;
+            _settings.SaveSoon();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsBasic));
+        }
+    }
+
+    public bool IsBasic => !IsAdvanced;
+
+    /// <summary>Basic-mode quality presets (offered only when the camera supports them).</summary>
+    public ObservableCollection<Option> QualityOptions { get; } = new();
+
+    private static readonly (string Key, string Label, int W, int H, double Mbps)[] QualityPresets =
+    {
+        ("720", "Leve · 720p", 1280, 720, 6),
+        ("1080", "Alta · 1080p (recomendado)", 1920, 1080, 12),
+        ("2160", "Máxima · 4K", 3840, 2160, 30),
+    };
+
+    private void RebuildQualityOptions()
+    {
+        QualityOptions.Clear();
+        var cam = CurrentCamera;
+        foreach (var p in QualityPresets)
+        {
+            if (cam is not null && !cam.Formats.Any(f => f.Width == p.W && f.Height == p.H)) continue;
+            QualityOptions.Add(new Option(p.Key, p.Label));
+        }
+        OnPropertyChanged(nameof(QualityKey));
+    }
+
+    /// <summary>Selected preset derived from the current format (null when it matches none).</summary>
+    public string? QualityKey
+    {
+        get
+        {
+            var f = Formats.FirstOrDefault(x => x.Key == _formatKey);
+            return f is null ? null : QualityPresets.FirstOrDefault(p => p.W == f.Width && p.H == f.Height).Key;
+        }
+        set
+        {
+            var p = QualityPresets.FirstOrDefault(q => q.Key == value);
+            if (p.Key is null) return;
+            // 30 fps (or the closest the camera offers) and a matching bitrate, H.264.
+            var match = Formats.Where(f => f.Width == p.W && f.Height == p.H)
+                               .OrderBy(f => Math.Abs(f.Fps - 30)).FirstOrDefault();
+            if (match is null) return;
+            BitrateMbps = p.Mbps;
+            if (CodecKey != "h264") CodecKey = "h264";
+            FormatKey = match.Key;
+            OnPropertyChanged();
+        }
+    }
 
     private void RebuildOptionLists()
     {
@@ -615,6 +681,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _formatKey = null; // force change notification
         FormatKey = best.Key;
         OnPropertyChanged(nameof(FormatKey));
+        RebuildQualityOptions();
     }
 
     // =============================================================================

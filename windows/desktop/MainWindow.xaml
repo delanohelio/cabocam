@@ -15,6 +15,14 @@
         <ScrollViewer Grid.Column="0" Margin="0,0,12,0">
             <StackPanel>
 
+                <Border Style="{StaticResource Card}" Padding="14,10">
+                    <Grid>
+                        <TextBlock Text="Modo avançado" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                        <CheckBox HorizontalAlignment="Right" VerticalAlignment="Center" IsChecked="{Binding IsAdvanced}"
+                                  ToolTip="Desligado: só o essencial. Ligado: todos os ajustes (codec, taxa de bits, exposição, balanço de branco…)."/>
+                    </Grid>
+                </Border>
+
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Conexão" Style="{StaticResource CardTitle}"/>
@@ -29,7 +37,7 @@
                         <TextBlock Text="{Binding DeviceLine}" Margin="0,10,0,0" TextWrapping="Wrap"
                                    Visibility="{Binding HasDevice, Converter={StaticResource BoolToVis}}"/>
 
-                        <Grid Margin="0,12,0,0">
+                        <Grid Margin="0,12,0,0" Visibility="{Binding IsAdvanced, Converter={StaticResource BoolToVis}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
@@ -49,17 +57,19 @@
                             </StackPanel>
                         </Grid>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                            <Button Content="Conectar por IP…" Command="{Binding ConnectByIpCommand}" Margin="0,0,8,0"/>
-                            <Button Content="Usar USB" Command="{Binding UseUsbCommand}"
-                                    Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}"/>
-                        </StackPanel>
+                        <StackPanel Visibility="{Binding IsAdvanced, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button Content="Conectar por IP…" Command="{Binding ConnectByIpCommand}" Margin="0,0,8,0"/>
+                                <Button Content="Usar USB" Command="{Binding UseUsbCommand}"
+                                        Visibility="{Binding IsManual, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
 
-                        <Border Height="1" Background="{StaticResource CardBorderBrush}" Margin="0,14,0,8"/>
-                        <CheckBox Content="Iniciar transmissão automaticamente" IsChecked="{Binding AutoStart}"/>
-                        <CheckBox Content="Iniciar minimizado" IsChecked="{Binding StartMinimized}"/>
-                        <CheckBox Content="Fechar para a bandeja do sistema" IsChecked="{Binding CloseToTray}"
-                                  ToolTip="Marcado: o X esconde a janela e a câmera CaboCam continua disponível. Desmarcado: o X encerra o CaboCam e remove a câmera."/>
+                            <Border Height="1" Background="{StaticResource CardBorderBrush}" Margin="0,14,0,8"/>
+                            <CheckBox Content="Iniciar transmissão automaticamente" IsChecked="{Binding AutoStart}"/>
+                            <CheckBox Content="Iniciar minimizado" IsChecked="{Binding StartMinimized}"/>
+                            <CheckBox Content="Fechar para a bandeja do sistema" IsChecked="{Binding CloseToTray}"
+                                      ToolTip="Marcado: o X esconde a janela e a câmera CaboCam continua disponível. Desmarcado: o X encerra o CaboCam e remove a câmera."/>
+                        </StackPanel>
 
                         <Border Height="1" Background="{StaticResource CardBorderBrush}" Margin="0,14,0,10"/>
                         <StackPanel Orientation="Horizontal">
@@ -85,19 +95,27 @@
                         <ComboBox ItemsSource="{Binding Cameras}" DisplayMemberPath="Label" SelectedValuePath="Id"
                                   SelectedValue="{Binding CameraId, Mode=TwoWay}"/>
 
-                        <TextBlock Text="Resolução e taxa de quadros" Style="{StaticResource FieldLabel}"/>
-                        <ComboBox ItemsSource="{Binding Formats}" DisplayMemberPath="Label" SelectedValuePath="Key"
-                                  SelectedValue="{Binding FormatKey, Mode=TwoWay}"/>
+                        <StackPanel Visibility="{Binding IsBasic, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Qualidade" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox ItemsSource="{Binding QualityOptions}" DisplayMemberPath="Label" SelectedValuePath="Key"
+                                      SelectedValue="{Binding QualityKey, Mode=TwoWay}"/>
+                        </StackPanel>
 
-                        <TextBlock Text="Codec" Style="{StaticResource FieldLabel}"/>
-                        <ComboBox ItemsSource="{Binding Codecs}" DisplayMemberPath="Label" SelectedValuePath="Key"
-                                  SelectedValue="{Binding CodecKey, Mode=TwoWay}"/>
+                        <StackPanel Visibility="{Binding IsAdvanced, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Resolução e taxa de quadros" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox ItemsSource="{Binding Formats}" DisplayMemberPath="Label" SelectedValuePath="Key"
+                                      SelectedValue="{Binding FormatKey, Mode=TwoWay}"/>
 
-                        <Grid Margin="0,10,0,4">
-                            <TextBlock Text="Taxa de bits" Style="{StaticResource Muted}"/>
-                            <TextBlock Text="{Binding BitrateLabel}" HorizontalAlignment="Right" FontSize="12"/>
-                        </Grid>
-                        <Slider Tag="bitrate" Minimum="2" Maximum="50" Value="{Binding BitrateMbps, Mode=TwoWay}"/>
+                            <TextBlock Text="Codec" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox ItemsSource="{Binding Codecs}" DisplayMemberPath="Label" SelectedValuePath="Key"
+                                      SelectedValue="{Binding CodecKey, Mode=TwoWay}"/>
+
+                            <Grid Margin="0,10,0,4">
+                                <TextBlock Text="Taxa de bits" Style="{StaticResource Muted}"/>
+                                <TextBlock Text="{Binding BitrateLabel}" HorizontalAlignment="Right" FontSize="12"/>
+                            </Grid>
+                            <Slider Tag="bitrate" Minimum="2" Maximum="50" Value="{Binding BitrateMbps, Mode=TwoWay}"/>
+                        </StackPanel>
 
                         <TextBlock Text="Orientação" Style="{StaticResource FieldLabel}"/>
                         <ComboBox ItemsSource="{Binding Orientations}" DisplayMemberPath="Label" SelectedValuePath="Key"
@@ -130,26 +148,31 @@
                                    TextWrapping="Wrap" Margin="0,6,0,0"
                                    Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}"/>
 
-                        <TextBlock Text="Versão" Style="{StaticResource FieldLabel}"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <ComboBox ItemsSource="{Binding Releases}" DisplayMemberPath="Label"
-                                      SelectedItem="{Binding SelectedRelease, Mode=TwoWay}"/>
-                            <Button Grid.Column="1" Content="↻" ToolTip="Atualizar lista de versões" Margin="6,0,0,0"
-                                    Padding="10,4" Command="{Binding RefreshReleasesCommand}"/>
-                        </Grid>
+                        <StackPanel Visibility="{Binding DataContext.IsAdvanced, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="Versão" Style="{StaticResource FieldLabel}"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ComboBox ItemsSource="{Binding Releases}" DisplayMemberPath="Label"
+                                          SelectedItem="{Binding SelectedRelease, Mode=TwoWay}"/>
+                                <Button Grid.Column="1" Content="↻" ToolTip="Atualizar lista de versões" Margin="6,0,0,0"
+                                        Padding="10,4" Command="{Binding RefreshReleasesCommand}"/>
+                            </Grid>
+                        </StackPanel>
 
                         <Button Content="Renovar / instalar versão" Command="{Binding InstallLatestCommand}"
                                 Style="{StaticResource PrimaryButton}" Margin="0,12,0,0"/>
                         <WrapPanel Margin="0,8,0,0">
                             <Button Content="Mostrar Modo Dev no iPhone" Command="{Binding RevealDevModeCommand}" Style="{StaticResource ChipButton}"
                                     ToolTip="Faz aparecer a opção Ajustes → Privacidade e Segurança → Modo de Desenvolvedor"/>
-                            <Button Content="Instalar .ipa…" Command="{Binding InstallFromFileCommand}" Style="{StaticResource ChipButton}"/>
-                            <Button Content="Entrar" Command="{Binding LoginCommand}" Style="{StaticResource ChipButton}"/>
-                            <Button Content="Sair" Command="{Binding LogoutCommand}" Style="{StaticResource ChipButton}"/>
+                            <Button Content="Instalar .ipa…" Command="{Binding InstallFromFileCommand}" Style="{StaticResource ChipButton}"
+                                    Visibility="{Binding DataContext.IsAdvanced, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="Entrar" Command="{Binding LoginCommand}" Style="{StaticResource ChipButton}"
+                                    Visibility="{Binding DataContext.IsAdvanced, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="Sair" Command="{Binding LogoutCommand}" Style="{StaticResource ChipButton}"
+                                    Visibility="{Binding DataContext.IsAdvanced, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}"/>
                             <Button Content="Cancelar" Command="{Binding CancelCommand}" Style="{StaticResource ChipButton}"
                                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                             <Button Content="{Binding HelpButtonText}" Command="{Binding ToggleHelpCommand}" Style="{StaticResource ChipButton}"/>
@@ -254,6 +277,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
+                    <StackPanel Visibility="{Binding IsAdvanced, Converter={StaticResource BoolToVis}}">
                     <!-- Focus -->
                     <TextBlock Text="Foco" Style="{StaticResource FieldLabel}" Margin="0,16,0,4"/>
                     <ComboBox ItemsSource="{Binding FocusOptions}" DisplayMemberPath="Label" SelectedValuePath="Key"
@@ -318,6 +342,10 @@
                     <CheckBox Content="HDR" IsChecked="{Binding Hdr}" IsEnabled="{Binding HdrEnabled}" Margin="0,14,0,0"/>
                     <CheckBox Content="Reforço em pouca luz" IsChecked="{Binding LowLightBoost}"
                               Visibility="{Binding LowLightVisible, Converter={StaticResource BoolToVis}}"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,12,0,0"
+                               Visibility="{Binding IsBasic, Converter={StaticResource BoolToVis}}"
+                               Text="Foco, exposição e cor ficam no automático. Toque na imagem para focar. Ligue o Modo avançado para ajustes manuais."/>
                     <CheckBox Content="Center Stage" IsChecked="{Binding CenterStage}"
                               Visibility="{Binding CenterStageVisible, Converter={StaticResource BoolToVis}}"/>
                     <CheckBox Content="Escurecer tela do iPhone" IsChecked="{Binding DimScreen}"/>

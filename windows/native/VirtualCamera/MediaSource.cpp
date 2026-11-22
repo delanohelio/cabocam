@@ -1,5 +1,18 @@
 #include "MediaSource.h"
 
+namespace
+{
+    // Diagnostics: which interfaces the Frame Server asks for that we do not implement.
+    void LogMissingInterface(const wchar_t* who, REFIID riid)
+    {
+        static volatile LONG budget = 40;   // avoid flooding the log
+        if (InterlockedDecrement(&budget) < 0) return;
+        wchar_t g[64] = L"?";
+        StringFromGUID2(riid, g, 64);
+        CcLog(L"%s: QueryInterface %s -> E_NOINTERFACE", who, g);
+    }
+}
+
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
 #endif
@@ -99,6 +112,7 @@ STDMETHODIMP CCMediaStream::QueryInterface(REFIID riid, void** ppv)
     else
     {
         *ppv = nullptr;
+        LogMissingInterface(L"stream", riid);
         return E_NOINTERFACE;
     }
     static_cast<IUnknown*>(*ppv)->AddRef();
@@ -140,6 +154,7 @@ STDMETHODIMP CCMediaStream::RequestSample(IUnknown* pToken)
 
 STDMETHODIMP CCMediaStream::SetStreamState(MF_STREAM_STATE value)
 {
+    CcLog(L"stream SetStreamState %d", static_cast<int>(value));
     bool streaming = false;
     {
         CcAutoLock l(m_cs);
@@ -515,6 +530,7 @@ STDMETHODIMP CCMediaSource::QueryInterface(REFIID riid, void** ppv)
     else
     {
         *ppv = nullptr;
+        LogMissingInterface(L"source", riid);
         return E_NOINTERFACE;
     }
     static_cast<IUnknown*>(*ppv)->AddRef();
@@ -541,6 +557,7 @@ STDMETHODIMP CCMediaSource::CreatePresentationDescriptor(IMFPresentationDescript
 STDMETHODIMP CCMediaSource::Start(IMFPresentationDescriptor* pPD, const GUID* pguidTimeFormat,
                                   const PROPVARIANT* pvarStartPosition)
 {
+  const HRESULT result = [&]() -> HRESULT {
     if (!pPD || !pvarStartPosition) return E_POINTER;
     if (pguidTimeFormat && !IsEqualGUID(*pguidTimeFormat, GUID_NULL))
         return MF_E_UNSUPPORTED_TIME_FORMAT;
@@ -580,10 +597,15 @@ STDMETHODIMP CCMediaSource::Start(IMFPresentationDescriptor* pPD, const GUID* pg
     if (FAILED(hr)) return hr;
 
     return m_events->QueueEventParamVar(MESourceStarted, GUID_NULL, S_OK, pvarStartPosition);
+  }();
+    CcLog(L"source Start(vt=%u) -> 0x%08X", pvarStartPosition ? static_cast<unsigned>(pvarStartPosition->vt) : 0u,
+          static_cast<unsigned>(result));
+    return result;
 }
 
 STDMETHODIMP CCMediaSource::Stop()
 {
+    CcLog(L"source Stop");
     CcAutoLock l(m_cs);
     if (m_shutdown) return MF_E_SHUTDOWN;
     const HRESULT hr = m_stream->Stop();    // queues MEStreamStopped
@@ -645,6 +667,7 @@ STDMETHODIMP CCMediaSource::GetStreamAttributes(DWORD dwStreamIdentifier, IMFAtt
 
 STDMETHODIMP CCMediaSource::SetD3DManager(IUnknown*)
 {
+    CcLog(L"source SetD3DManager");
     CcAutoLock l(m_cs);
     if (m_shutdown) return MF_E_SHUTDOWN;
     return S_OK;    // we produce system-memory samples; the manager is ignored
@@ -652,12 +675,14 @@ STDMETHODIMP CCMediaSource::SetD3DManager(IUnknown*)
 
 STDMETHODIMP CCMediaSource::GetService(REFGUID, REFIID, LPVOID* ppvObject)
 {
+    CcLog(L"source GetService");
     if (ppvObject) *ppvObject = nullptr;
     return MF_E_UNSUPPORTED_SERVICE;
 }
 
 STDMETHODIMP CCMediaSource::SetDefaultAllocator(DWORD, IUnknown*)
 {
+    CcLog(L"source SetDefaultAllocator");
     return S_OK;    // accepted and ignored: we allocate our own samples (see GetAllocatorUsage)
 }
 
