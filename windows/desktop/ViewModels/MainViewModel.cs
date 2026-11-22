@@ -284,7 +284,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ => BadBrush,
         };
         VcamInUse = _vcam.InUse;
-        NeedsDriver = _vcam.Status == VcamStatus.NotInstalled;
+        NeedsDriver = _vcam.Status is VcamStatus.NotInstalled or VcamStatus.NoAccess;
     }
 
     private bool _needsDriver;
@@ -366,7 +366,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         double mbps = (st?.Stats?.BitrateKbps ?? st?.BitrateKbps ?? 0) / 1000.0;
         string codec = string.Equals(st?.Codec, "hevc", StringComparison.OrdinalIgnoreCase) ? "HEVC" : "H.264";
         OverlayText = IsStreaming && _video.FrameWidth > 0
-            ? $"{fps:0.0} fps · {mbps:0.0} Mbps · {_video.FrameWidth}×{_video.FrameHeight} · {codec}"
+            ? $"{fps:0.0} fps · {mbps:0.0} Mbps · {_video.FrameWidth}×{_video.FrameHeight} · {codec} · decodificação {_video.AvgDecodeMs:0} ms"
+              + (_video.LatencyDrops > 0 ? $" · {_video.LatencyDrops} descartes p/ atraso" : "")
             : "";
 
         LatencyText = _conn.LatencyMs >= 0 ? $"{_conn.LatencyMs} ms" : "—";

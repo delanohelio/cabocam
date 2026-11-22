@@ -48,6 +48,8 @@ public partial class App : Application
         Log.Cleanup();
         Log.Info("CaboCam iniciando");
 
+        CaboCam.Native.NativeMethods.EnableNativeLog();
+
         _settings = new SettingsStore();
         _settings.Load();
 
@@ -134,6 +136,25 @@ public partial class App : Application
         _window.Show();
         if (_window.WindowState == WindowState.Minimized) _window.WindowState = WindowState.Normal;
         _window.Activate();
+    }
+
+    private bool _trayHintShown;
+
+    /// <summary>
+    /// The window was closed to the tray: the process (and the "CaboCam" camera) keeps running.
+    /// Say so once per run, so it is clear how to remove the camera.
+    /// </summary>
+    public void ShowTrayHintOnce()
+    {
+        if (_trayHintShown || _tray is null) return;
+        _trayHintShown = true;
+        try
+        {
+            _tray.ShowBalloonTip(6000, "CaboCam continua aberto",
+                "A câmera virtual continua disponível enquanto o CaboCam roda na bandeja. Para encerrar e remover a câmera, clique com o botão direito aqui → Sair.",
+                Forms.ToolTipIcon.Info);
+        }
+        catch { /* notifications disabled */ }
     }
 
     private void ExitApplication()

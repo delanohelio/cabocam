@@ -8,7 +8,7 @@ using CaboCam.Native;
 
 namespace CaboCam.Services;
 
-public enum VcamStatus { Unknown, Active, NotInstalled, RequiresWindows11, Failed }
+public enum VcamStatus { Unknown, Active, NotInstalled, NoAccess, RequiresWindows11, Failed }
 
 /// <summary>Registers the MF virtual camera and polls whether an app consumes it.</summary>
 public sealed class VirtualCameraService : IDisposable
@@ -25,6 +25,11 @@ public sealed class VirtualCameraService : IDisposable
 
     public void Register()
     {
+        if (Environment.OSVersion.Version.Build < 22000)
+        {
+            Set(VcamStatus.RequiresWindows11, "A câmera virtual requer o Windows 11.");
+            return;
+        }
         try
         {
             int hr = NativeMethods.cc_vcam_register();
@@ -36,17 +41,24 @@ public sealed class VirtualCameraService : IDisposable
                 return;
             }
 
-            Log.Error($"cc_vcam_register falhou: 0x{hr:X8}");
+            var registered = RegisteredDllPath();
+            Log.Error($"cc_vcam_register falhou: 0x{hr:X8} (driver registrado: {registered ?? "nenhum"})");
+            bool otherFolder = registered is not null &&
+                               !string.Equals(Path.GetFullPath(registered), Path.GetFullPath(DriverDllPath), StringComparison.OrdinalIgnoreCase);
             switch ((uint)hr)
             {
                 case 0x80040154: // REGDB_E_CLASSNOTREG
                     Set(VcamStatus.NotInstalled, "Driver da câmera virtual não instalado.");
                     break;
-                case 0x80070005: // E_ACCESSDENIED
-                    Set(VcamStatus.RequiresWindows11, "Requer Windows 11");
+                case 0x80070005: // E_ACCESSDENIED: the Frame Server (LOCAL SERVICE) cannot load the DLL
+                    Set(VcamStatus.NoAccess, otherFolder
+                        ? $"O driver está registrado em outra pasta ({Path.GetDirectoryName(registered)}) que o serviço de câmera do Windows não consegue ler. Reinstale o driver."
+                        : "O serviço de câmera do Windows não tem permissão para ler o driver (pasta extraída de novo?). Reinstale o driver.");
                     break;
                 default:
-                    Set(VcamStatus.Failed, $"Falha ao criar a câmera virtual (0x{hr:X8})");
+                    Set(otherFolder ? VcamStatus.NoAccess : VcamStatus.Failed, otherFolder
+                        ? $"O driver está registrado em outra pasta ({Path.GetDirectoryName(registered)}). Reinstale o driver. (0x{hr:X8})"
+                        : $"Falha ao criar a câmera virtual (0x{hr:X8})");
                     break;
             }
         }
@@ -68,6 +80,21 @@ public sealed class VirtualCameraService : IDisposable
     }
 
     public static string DriverDllPath => Path.Combine(AppContext.BaseDirectory, "CaboCam.VirtualCamera.dll");
+
+    /// <summary>DLL path registered for the media source CLSID (HKLM), or null.</summary>
+    public static string? RegisteredDllPath()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Classes\CLSID\{B66867C7-2F79-49DF-983E-13FAB663FD84}\InprocServer32");
+            return key?.GetValue(null) as string;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Registers the virtual camera COM DLL as administrator (UAC prompt), the same as the
@@ -137,8 +164,14 @@ public sealed class VirtualCameraService : IDisposable
         _poll = null;
         if (_registered)
         {
-            try { NativeMethods.cc_vcam_unregister(); } catch (Exception ex) { Log.Error("cc_vcam_unregister", ex); }
+            try
+            {
+                int hr = NativeMethods.cc_vcam_unregister();
+                Log.Info(hr == 0 ? "Câmera virtual removida" : $"Remoção da câmera virtual retornou 0x{hr:X8}");
+            }
+            catch (Exception ex) { Log.Error("cc_vcam_unregister", ex); }
             _registered = false;
+            Set(VcamStatus.Unknown, "Câmera virtual removida");
         }
     }
 }

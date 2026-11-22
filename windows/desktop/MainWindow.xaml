@@ -58,7 +58,8 @@
                         <Border Height="1" Background="{StaticResource CardBorderBrush}" Margin="0,14,0,8"/>
                         <CheckBox Content="Iniciar transmissão automaticamente" IsChecked="{Binding AutoStart}"/>
                         <CheckBox Content="Iniciar minimizado" IsChecked="{Binding StartMinimized}"/>
-                        <CheckBox Content="Fechar para a bandeja do sistema" IsChecked="{Binding CloseToTray}"/>
+                        <CheckBox Content="Fechar para a bandeja do sistema" IsChecked="{Binding CloseToTray}"
+                                  ToolTip="Marcado: o X esconde a janela e a câmera CaboCam continua disponível. Desmarcado: o X encerra o CaboCam e remove a câmera."/>
 
                         <Border Height="1" Background="{StaticResource CardBorderBrush}" Margin="0,14,0,10"/>
                         <StackPanel Orientation="Horizontal">
