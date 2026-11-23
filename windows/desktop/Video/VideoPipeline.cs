@@ -24,6 +24,7 @@ public sealed unsafe class VideoPipeline : IDisposable
     private int _decodeMsCount;
     private long _decodeWindowStart = Environment.TickCount64;
     private bool _dumpedFailure;
+    private bool _oversizeReported;
     private VideoPacket? _lastKeyframe;
     private const int PreviewMaxWidth = 960;
     private const long PreviewIntervalMs = 33;       // ~30 fps
@@ -354,12 +355,28 @@ public sealed unsafe class VideoPipeline : IDisposable
         }
         if (_sinkOpen)
         {
-            int wr;
-            fixed (byte* buf = _nv12)
+            // The camera buffer holds up to 3840 per side and the 4K pixel count
+            // (e.g. 2160x3840 or 3264x2448 fit; the 12 MP 4032x3024 format does not).
+            bool fits = w <= 3840 && h <= 3840 && (long)w * h <= 3840L * 2160;
+            if (!fits)
             {
-                wr = NativeMethods.cc_sink_write_nv12(buf, w, h, w, ptsHns);
+                if (!_oversizeReported)
+                {
+                    _oversizeReported = true;
+                    Log.Warn($"Quadro {w}x{h} maior que o suportado pela câmera virtual");
+                    Error?.Invoke($"O formato {w}×{h} é maior que 4K e não chega à câmera virtual. Escolha 4K ou menos.");
+                }
             }
-            if (wr <= 0) _sinkOpen = false; // 0: sink gone; <0: bad args — retry open later
+            else
+            {
+                _oversizeReported = false;
+                int wr;
+                fixed (byte* buf = _nv12)
+                {
+                    wr = NativeMethods.cc_sink_write_nv12(buf, w, h, w, ptsHns);
+                }
+                if (wr <= 0) _sinkOpen = false; // 0: sink gone; <0: bad args — retry open later
+            }
         }
 
         // 2) preview (<= 30 fps, drop if the UI has not consumed the previous one)

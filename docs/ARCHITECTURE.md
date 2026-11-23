@@ -69,7 +69,9 @@ Windows 11 PC, over the Lightning/USB-C cable.
    also means "some app is consuming the camera". If creation fails, the source tries to
    open an existing one (desktop running elevated may create it).
 5. **Media source scales.** It advertises NV12 1920×1080@30 (first/default), 1280×720@30,
-   1920×1080@60, 1280×720@60, 3840×2160@30, 640×480@30. Incoming frames of other sizes are
+   1920×1080@60, 1280×720@60, 2560×1440@30 (2K), 3200×1800@30 (3K), 3840×2160@30, 640×480@30.
+   The frame buffer accepts any orientation up to 3840 per side and the 4K pixel count
+   (`CABOCAM_FRAME_FITS`). Incoming frames of other sizes are
    center-crop-scaled (bilinear) to the negotiated size. With no recent frame (>1 s) it
    emits a dark gray frame so consumers never stall.
 6. **iOS must stay in foreground** (iOS suspends camera in background). The app disables

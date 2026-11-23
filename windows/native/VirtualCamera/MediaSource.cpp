@@ -25,7 +25,8 @@ namespace
     // Order matters: the first entry is the default mode.
     const Mode kModes[] = {
         { 1920, 1080, 30 }, { 1280, 720, 30 }, { 1920, 1080, 60 },
-        { 1280, 720, 60 }, { 3840, 2160, 30 }, { 640, 480, 30 },
+        { 1280, 720, 60 }, { 2560, 1440, 30 }, { 3200, 1800, 30 },
+        { 3840, 2160, 30 }, { 640, 480, 30 },
     };
     const DWORD kModeCount = static_cast<DWORD>(_countof(kModes));
 
