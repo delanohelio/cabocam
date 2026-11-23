@@ -19,6 +19,13 @@
 #define CABOCAM_MAX_HEIGHT 2160u
 #define CABOCAM_SHM_HEADER_SIZE 4096u
 #define CABOCAM_SHM_DATA_CAPACITY (CABOCAM_MAX_WIDTH * CABOCAM_MAX_HEIGHT * 3u / 2u)
+
+// Frames in the buffer: any orientation/aspect up to 3840 on either side and up to the 4K
+// pixel count (so 2160x3840 portrait and 3264x2448 4:3 fit; 4032x3024 does not).
+#define CABOCAM_MAX_SIDE 3840u
+#define CABOCAM_FRAME_FITS(w, h) \
+    ((w) >= 2u && (h) >= 2u && (w) <= CABOCAM_MAX_SIDE && (h) <= CABOCAM_MAX_SIDE && \
+     (unsigned long long)(w) * (h) * 3u / 2u <= CABOCAM_SHM_DATA_CAPACITY)
 #define CABOCAM_SHM_TOTAL_SIZE (CABOCAM_SHM_HEADER_SIZE + CABOCAM_SHM_DATA_CAPACITY)
 
 // Layout of the first CABOCAM_SHM_HEADER_SIZE bytes. Frame bytes start at offset

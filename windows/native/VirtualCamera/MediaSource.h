@@ -98,6 +98,8 @@ private:
     LONGLONG m_start = 0;
     LONGLONG m_nextDue = 0;
     std::deque<ComPtr<IUnknown>> m_pending;
+    unsigned long m_requests = 0;   // diagnostics
+    LONG m_samplesSent = 0;         // diagnostics (worker thread only)
 
     HANDLE m_wake = nullptr;    // auto-reset
     HANDLE m_timer = nullptr;   // waitable timer (high resolution when available)

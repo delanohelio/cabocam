@@ -41,7 +41,7 @@ CC_API int32_t cc_sink_write_nv12(const uint8_t* data, int32_t width, int32_t he
                                   int32_t stride, int64_t timestampHns)
 {
     if (!data || width <= 0 || height <= 0 || (width & 1) || (height & 1) ||
-        width > static_cast<int32_t>(CABOCAM_MAX_WIDTH) || height > static_cast<int32_t>(CABOCAM_MAX_HEIGHT) ||
+        !CABOCAM_FRAME_FITS(static_cast<uint32_t>(width), static_cast<uint32_t>(height)) ||
         stride < width)
         return E_INVALIDARG;
 

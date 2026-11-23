@@ -82,7 +82,7 @@ bool SharedFrameSource::CopyLatestLocked()
         const uint32_t ht = h->height;
         const uint32_t ds = h->dataSize;
         const int64_t fc = h->frameCounter;
-        if (w < 2 || ht < 2 || (w & 1) || (ht & 1) || w > CABOCAM_MAX_WIDTH || ht > CABOCAM_MAX_HEIGHT ||
+        if ((w & 1) || (ht & 1) || !CABOCAM_FRAME_FITS(w, ht) ||
             ds != w * ht * 3u / 2u || ds > CABOCAM_SHM_DATA_CAPACITY)
         {
             MemoryBarrier();
