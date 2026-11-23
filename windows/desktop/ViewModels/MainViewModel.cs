@@ -570,21 +570,41 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// <summary>Basic-mode quality presets (offered only when the camera supports them).</summary>
     public ObservableCollection<Option> QualityOptions { get; } = new();
 
-    private static readonly (string Key, string Label, int W, int H, double Mbps)[] QualityPresets =
+    /// <summary>
+    /// Presets by the long side of the frame. The iPhone offers e.g. 1920×1440, 2592×1944 or
+    /// 3264×2448 rather than exact 2K/3K sizes, so each preset takes the best format in its range
+    /// (16:9 first, then the largest) and the label shows the real resolution.
+    /// </summary>
+    private static readonly (string Key, string Name, int MinLong, int MaxLong, double Mbps)[] QualityPresets =
     {
-        ("720", "Leve · 720p", 1280, 720, 6),
-        ("1080", "Alta · 1080p (recomendado)", 1920, 1080, 12),
-        ("2160", "Máxima · 4K", 3840, 2160, 30),
+        ("720", "Leve", 1280, 1280, 6),
+        ("1080", "Alta (recomendado)", 1920, 1920, 12),
+        ("2k", "2K", 2304, 2880, 18),
+        ("3k", "3K", 2881, 3500, 24),
+        ("4k", "Máxima · 4K", 3840, 3840, 30),
     };
+
+    private static int LongSide(int w, int h) => Math.Max(w, h);
+
+    private (int W, int H)? BestFormatFor((string Key, string Name, int MinLong, int MaxLong, double Mbps) p)
+    {
+        var cam = CurrentCamera;
+        if (cam is null) return null;
+        var best = cam.Formats
+            .Where(f => LongSide(f.Width, f.Height) >= p.MinLong && LongSide(f.Width, f.Height) <= p.MaxLong)
+            .OrderBy(f => Math.Abs((double)f.Width / Math.Max(1, f.Height) - 16.0 / 9) < 0.02 ? 0 : 1)
+            .ThenByDescending(f => (long)f.Width * f.Height)
+            .FirstOrDefault();
+        return best is null ? null : (best.Width, best.Height);
+    }
 
     private void RebuildQualityOptions()
     {
         QualityOptions.Clear();
-        var cam = CurrentCamera;
         foreach (var p in QualityPresets)
         {
-            if (cam is not null && !cam.Formats.Any(f => f.Width == p.W && f.Height == p.H)) continue;
-            QualityOptions.Add(new Option(p.Key, p.Label));
+            if (BestFormatFor(p) is not { } size) continue;
+            QualityOptions.Add(new Option(p.Key, $"{p.Name} · {size.W}×{size.H}"));
         }
         OnPropertyChanged(nameof(QualityKey));
     }
@@ -595,14 +615,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         get
         {
             var f = Formats.FirstOrDefault(x => x.Key == _formatKey);
-            return f is null ? null : QualityPresets.FirstOrDefault(p => p.W == f.Width && p.H == f.Height).Key;
+            if (f is null) return null;
+            foreach (var p in QualityPresets)
+                if (BestFormatFor(p) is { } s && s.W == f.Width && s.H == f.Height) return p.Key;
+            return null;
         }
         set
         {
             var p = QualityPresets.FirstOrDefault(q => q.Key == value);
-            if (p.Key is null) return;
+            if (p.Key is null || BestFormatFor(p) is not { } size) return;
             // 30 fps (or the closest the camera offers) and a matching bitrate, H.264.
-            var match = Formats.Where(f => f.Width == p.W && f.Height == p.H)
+            var match = Formats.Where(f => f.Width == size.W && f.Height == size.H)
                                .OrderBy(f => Math.Abs(f.Fps - 30)).FirstOrDefault();
             if (match is null) return;
             BitrateMbps = p.Mbps;

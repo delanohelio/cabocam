@@ -144,9 +144,18 @@ STDMETHODIMP CCMediaStream::RequestSample(IUnknown* pToken)
     {
         CcAutoLock l(m_cs);
         if (m_shutdown) return MF_E_SHUTDOWN;
-        if (m_state == MF_STREAM_STATE_STOPPED) return MF_E_INVALIDREQUEST;
-        if (m_pending.size() >= 64) return MF_E_INVALIDREQUEST;   // runaway consumer
+        // Do not reject requests while stopped: the Frame Server may ask for the first sample as
+        // soon as it sees MENewStream, before Start() has switched the stream to running. A
+        // rejected token is never re-sent, so the camera would stay black. Queue it; the worker
+        // serves it once the stream runs (Stop clears the queue).
+        if (m_pending.size() >= 64)
+        {
+            CcLog(L"RequestSample rejected: %zu pending", m_pending.size());
+            return MF_E_INVALIDREQUEST;   // runaway consumer
+        }
         m_pending.emplace_back(pToken);   // ComPtr<IUnknown>(IUnknown*) AddRefs; token may be null
+        if (m_requests++ == 0)
+            CcLog(L"first RequestSample (state %d)", static_cast<int>(m_state));
     }
     SetEvent(m_wake);
     return S_OK;
@@ -231,7 +240,8 @@ HRESULT CCMediaStream::Start(IMFMediaType* type, const PROPVARIANT* startPos)
         if (m_frameDur <= 0) m_frameDur = 333333;
         m_type = type;
         InitAllocatorLocked(type);
-        m_pending.clear();
+        // Keep requests that arrived before Start (see RequestSample): clearing them here left
+        // the Frame Server waiting forever for samples it had already asked for.
         m_state = MF_STREAM_STATE_RUNNING;
         m_start = MFGetSystemTime();
         m_nextDue = m_start;
@@ -436,7 +446,10 @@ void CCMediaStream::WorkerLoop()
 
         // m_events is created in Init and never replaced, so it is safe to use unlocked;
         // after Shutdown the queue itself returns MF_E_SHUTDOWN.
-        m_events->QueueEventParamUnk(MEMediaSample, GUID_NULL, S_OK, sample.Get());
+        const HRESULT qh = m_events->QueueEventParamUnk(MEMediaSample, GUID_NULL, S_OK, sample.Get());
+        const LONG n = ++m_samplesSent;
+        if (FAILED(qh)) CcLog(L"QueueEvent(MEMediaSample) failed 0x%08X", static_cast<unsigned>(qh));
+        else if (n == 1 || n % 900 == 0) CcLog(L"samples delivered: %ld (%ux%u)", n, w, h);
     }
 
     if (SUCCEEDED(coHr)) CoUninitialize();
@@ -675,7 +688,6 @@ STDMETHODIMP CCMediaSource::SetD3DManager(IUnknown*)
 
 STDMETHODIMP CCMediaSource::GetService(REFGUID, REFIID, LPVOID* ppvObject)
 {
-    CcLog(L"source GetService");
     if (ppvObject) *ppvObject = nullptr;
     return MF_E_UNSUPPORTED_SERVICE;
 }
