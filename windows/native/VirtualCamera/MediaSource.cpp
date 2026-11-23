@@ -437,8 +437,12 @@ void CCMediaStream::WorkerLoop()
             CcLog(L"BuildSample failed 0x%08X", static_cast<unsigned>(hr));
             continue;
         }
-        LONGLONG t = MFGetSystemTime() - start;
-        if (t < 0) t = 0;
+        // Live camera samples carry the system time (QPC-based, 100 ns), like Microsoft's
+        // SimpleMediaSource. The Frame Server/clients compare it with the system clock: a
+        // stream-relative time (0, 33 ms, ...) looks hours late and every sample was dropped,
+        // leaving Meet/Teams on a gray "no video" frame.
+        (void)start;
+        const LONGLONG t = MFGetSystemTime();
         sample->SetSampleTime(t);
         sample->SetSampleDuration(dur);
         sample->SetUINT32(MFSampleExtension_CleanPoint, TRUE);
